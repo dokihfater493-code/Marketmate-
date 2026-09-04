@@ -1,0 +1,11 @@
+{
+  "name": "MarketMate - Business Management",
+  "short_name": "MarketMate",
+  "description": "Manage customers, products, sales and daily business activities.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#087f5b",
+  "orientation": "portrait",
+  "icons": []
+}
