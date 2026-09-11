@@ -1,7 +1,7 @@
-// =====================================
-// MARKETMATE
-// SUPABASE VERSION
-// =====================================
+/* =====================================================
+   MARKETMATE
+   CLEAN SUPABASE VERSION
+===================================================== */
 
 const SUPABASE_URL =
   "https://otyeuloadcpatrzqdgqm.supabase.co";
@@ -15,9 +15,10 @@ const supabaseClient =
     SUPABASE_KEY
   );
 
-// =====================================
-// APP DATA
-// =====================================
+
+/* =====================================================
+   STATE
+===================================================== */
 
 let currentUser = null;
 
@@ -26,6 +27,8 @@ let sales = [];
 let expenses = [];
 let customers = [];
 
+let posCart = [];
+
 let businessProfile = {
   businessName: "",
   ownerName: "",
@@ -33,11 +36,87 @@ let businessProfile = {
   address: ""
 };
 
-// =====================================
-// AUTH
-// =====================================
+
+/* =====================================================
+   HELPERS
+===================================================== */
+
+function money(value) {
+  return "₦" + Number(value || 0).toLocaleString("en-NG");
+}
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatDate(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleString("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  });
+}
+
+function isToday(value) {
+  const date = new Date(value);
+  const today = new Date();
+
+  return date.toDateString() === today.toDateString();
+}
+
+function isThisWeek(value) {
+  const date = new Date(value);
+  const today = new Date();
+
+  const firstDay = new Date(today);
+
+  firstDay.setDate(
+    today.getDate() - today.getDay()
+  );
+
+  firstDay.setHours(0, 0, 0, 0);
+
+  return date >= firstDay && date <= today;
+}
+
+function isThisMonth(value) {
+  const date = new Date(value);
+  const today = new Date();
+
+  return (
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+  );
+}
+
+function requireUser() {
+  if (!currentUser) {
+    alert("Please log in first.");
+    return false;
+  }
+
+  return true;
+}
+
+
+/* =====================================================
+   AUTH
+===================================================== */
 
 async function signupUser() {
+
   const email =
     document.getElementById("signupEmail").value.trim();
 
@@ -62,7 +141,7 @@ async function signupUser() {
     return;
   }
 
-  const { error } =
+  const { data, error } =
     await supabaseClient.auth.signUp({
       email,
       password
@@ -73,16 +152,22 @@ async function signupUser() {
     return;
   }
 
-  alert(
-    "Account created successfully! Check your email to confirm your account."
-  );
+  if (data.session) {
+    currentUser = data.user;
+    showApp();
+    await loadAllData();
+  } else {
+    alert(
+      "Account created successfully. Check your email to confirm your account."
+    );
 
-  showLogin();
+    showLogin();
+  }
 }
 
-// =====================================
 
 async function loginUser() {
+
   const email =
     document.getElementById("loginEmail").value.trim();
 
@@ -112,9 +197,9 @@ async function loginUser() {
   await loadAllData();
 }
 
-// =====================================
 
 async function logoutUser() {
+
   const { error } =
     await supabaseClient.auth.signOut();
 
@@ -124,11 +209,11 @@ async function logoutUser() {
   }
 
   currentUser = null;
-
   products = [];
   sales = [];
   expenses = [];
   customers = [];
+  posCart = [];
 
   businessProfile = {
     businessName: "",
@@ -140,76 +225,53 @@ async function logoutUser() {
   showLogin();
 }
 
-// Keep compatibility with existing HTML
 async function logout() {
   await logoutUser();
 }
 
-// =====================================
 
 function showSignup() {
-  const loginForm =
-    document.getElementById("loginForm");
 
-  const signupForm =
-    document.getElementById("signupForm");
+  document
+    .getElementById("loginForm")
+    .classList.add("hidden");
 
-  if (loginForm) {
-    loginForm.style.display = "none";
-  }
-
-  if (signupForm) {
-    signupForm.style.display = "block";
-  }
+  document
+    .getElementById("signupForm")
+    .classList.remove("hidden");
 }
 
-// =====================================
 
 function showLogin() {
-  const loginForm =
-    document.getElementById("loginForm");
 
-  const signupForm =
-    document.getElementById("signupForm");
+  document
+    .getElementById("signupForm")
+    .classList.add("hidden");
 
-  if (loginForm) {
-    loginForm.style.display = "block";
-  }
-
-  if (signupForm) {
-    signupForm.style.display = "none";
-  }
+  document
+    .getElementById("loginForm")
+    .classList.remove("hidden");
 }
 
-// =====================================
 
 function showApp() {
-  const authScreen =
-    document.getElementById("authScreen");
 
-  if (authScreen) {
-    authScreen.style.display = "none";
-  }
+  document
+    .getElementById("authScreen")
+    .classList.add("hidden");
+
+  document
+    .getElementById("appShell")
+    .classList.remove("hidden");
 }
 
-// =====================================
-// USER CHECK
-// =====================================
 
-function requireUser() {
-  if (!currentUser) {
-    alert("Please log in first.");
-    return false;
-  }
-
-  return true;
-}
-
-// =====================================
-// DATA MAPPING
-// =====================================
+/* =====================================================
+   DATA MAPPING
+===================================================== */
 
 function mapProduct(row) {
+
   return {
     ...row,
     id: Number(row.id),
@@ -220,33 +282,39 @@ function mapProduct(row) {
   };
 }
 
+
 function mapSale(row) {
+
   return {
     ...row,
     id: Number(row.id),
-    receiptNumber: row.receipt_number,
-    product: row.product,
+    receiptNumber: row.receipt_number || "",
+    product: row.product || "",
     quantity: Number(row.quantity || 0),
     amount: Number(row.amount || 0),
     date: row.created_at
   };
 }
 
+
 function mapExpense(row) {
+
   return {
     ...row,
     id: Number(row.id),
-    name: row.name,
+    name: row.name || "",
     amount: Number(row.amount || 0),
     date: row.created_at
   };
 }
 
-// =====================================
-// LOAD ALL SUPABASE DATA
-// =====================================
+
+/* =====================================================
+   LOAD DATA
+===================================================== */
 
 async function loadAllData() {
+
   if (!currentUser) return;
 
   const uid = currentUser.id;
@@ -258,43 +326,37 @@ async function loadAllData() {
     customersResult,
     businessResult
   ] = await Promise.all([
+
     supabaseClient
       .from("products")
       .select("*")
       .eq("user_id", uid)
-      .order("created_at", {
-        ascending: false
-      }),
+      .order("created_at", { ascending: false }),
 
     supabaseClient
       .from("sales")
       .select("*")
       .eq("user_id", uid)
-      .order("created_at", {
-        ascending: false
-      }),
+      .order("created_at", { ascending: false }),
 
     supabaseClient
       .from("expenses")
       .select("*")
       .eq("user_id", uid)
-      .order("created_at", {
-        ascending: false
-      }),
+      .order("created_at", { ascending: false }),
 
     supabaseClient
       .from("customers")
       .select("*")
       .eq("user_id", uid)
-      .order("created_at", {
-        ascending: false
-      }),
+      .order("created_at", { ascending: false }),
 
     supabaseClient
       .from("businesses")
       .select("*")
       .eq("id", uid)
       .maybeSingle()
+
   ]);
 
   const results = [
@@ -339,6 +401,7 @@ async function loadAllData() {
     businessResult.data;
 
   if (business) {
+
     businessProfile = {
       businessName:
         business.business_name || "",
@@ -352,28 +415,34 @@ async function loadAllData() {
       address:
         business.address || ""
     };
+
   } else {
+
     businessProfile = {
       businessName: "",
       ownerName: "",
       phone: "",
       address: ""
     };
+
   }
 
   updateDashboard();
   displayProducts();
-  updateSaleProducts();
+  displayPOSProducts();
+  renderPOSCart();
   displayCustomers();
   displayHistory();
   loadBusinessProfile();
 }
 
-// =====================================
-// CHECK USER
-// =====================================
+
+/* =====================================================
+   SESSION
+===================================================== */
 
 async function checkUser() {
+
   const {
     data,
     error
@@ -386,80 +455,80 @@ async function checkUser() {
   }
 
   if (data.session) {
+
     currentUser =
       data.session.user;
 
     showApp();
 
     await loadAllData();
+
   } else {
+
     currentUser = null;
 
-    const authScreen =
-      document.getElementById(
-        "authScreen"
-      );
+    document
+      .getElementById("authScreen")
+      .classList.remove("hidden");
 
-    if (authScreen) {
-      authScreen.style.display = "flex";
-    }
+    document
+      .getElementById("appShell")
+      .classList.add("hidden");
   }
 }
 
-// =====================================
-// AUTH STATE
-// =====================================
 
 supabaseClient.auth.onAuthStateChange(
-  async (event, session) => {
+  (event, session) => {
 
-    console.log(
-      "Auth event:",
-      event
-    );
+    if (event === "SIGNED_IN" && session) {
 
-    if (
-      event === "SIGNED_IN" &&
-      session
-    ) {
       currentUser =
         session.user;
 
       showApp();
 
-      await loadAllData();
+      setTimeout(
+        () => loadAllData(),
+        0
+      );
     }
 
-    if (
-      event === "SIGNED_OUT"
-    ) {
+    if (event === "SIGNED_OUT") {
+
       currentUser = null;
 
       products = [];
       sales = [];
       expenses = [];
       customers = [];
+      posCart = [];
 
-      window.location.href =
-        "index.html";
+      document
+        .getElementById("authScreen")
+        .classList.remove("hidden");
+
+      document
+        .getElementById("appShell")
+        .classList.add("hidden");
     }
+
   }
 );
 
-// =====================================
-// NAVIGATION
-// =====================================
+
+/* =====================================================
+   NAVIGATION
+===================================================== */
 
 function showPage(page) {
 
-  // Hide all pages
   document
     .querySelectorAll(".page")
     .forEach(section => {
       section.classList.remove("active");
     });
 
-  // Show selected page
   const selected =
     document.getElementById(page);
 
@@ -467,224 +536,101 @@ function showPage(page) {
     selected.classList.add("active");
   }
 
-  // Update sidebar navigation
   document
-    .querySelectorAll(".sidebar-link")
-    .forEach(link => {
-
-      link.classList.remove("active");
-
-      const onclick =
-        link.getAttribute("onclick");
-
-      if (
-        onclick &&
-        onclick.includes(`'${page}'`)
-      ) {
-        link.classList.add("active");
-      }
-    });
-
-  // Update mobile navigation
-  document
-    .querySelectorAll(".mobile-nav button")
+    .querySelectorAll(".nav-item, .mobile-nav button")
     .forEach(button => {
 
-      button.classList.remove("active");
+      button.classList.toggle(
+        "active",
+        button.dataset.page === page
+      );
 
-      const onclick =
-        button.getAttribute("onclick");
-
-      if (
-        onclick &&
-        onclick.includes(`'${page}'`)
-      ) {
-        button.classList.add("active");
-      }
     });
 
-  // Refresh application data
   updateDashboard();
-  displayProducts();
-  updateSaleProducts();
-  displayCustomers();
-  displayHistory();
-  loadBusinessProfile();
 
-  // Scroll to top
   window.scrollTo({
     top: 0,
     behavior: "smooth"
   });
 }
 
-// =====================================
-// DATE HELPERS
-// =====================================
 
-function isToday(dateString) {
-
-  const date =
-    new Date(dateString);
-
-  const today =
-    new Date();
-
-  return (
-    date.toDateString() ===
-    today.toDateString()
-  );
-}
-
-// =====================================
-
-function isThisWeek(dateString) {
-
-  const date =
-    new Date(dateString);
-
-  const today =
-    new Date();
-
-  const firstDay =
-    new Date(today);
-
-  firstDay.setDate(
-    today.getDate() -
-    today.getDay()
-  );
-
-  firstDay.setHours(
-    0, 0, 0, 0
-  );
-
-  return date >= firstDay;
-}
-
-// =====================================
-
-function isThisMonth(dateString) {
-
-  const date =
-    new Date(dateString);
-
-  const today =
-    new Date();
-
-  return (
-    date.getMonth() ===
-      today.getMonth() &&
-    date.getFullYear() ===
-      today.getFullYear()
-  );
-}
-
-// =====================================
-// DASHBOARD
-// =====================================
+/* =====================================================
+   DASHBOARD
+===================================================== */
 
 function updateDashboard() {
 
   const todaySales =
     sales
-      .filter(
-        sale =>
-          isToday(sale.date)
-      )
+      .filter(sale => isToday(sale.date))
       .reduce(
-        (sum, sale) =>
-          sum + sale.amount,
+        (total, sale) =>
+          total + Number(sale.amount || 0),
         0
       );
 
   const todayExpenses =
     expenses
-      .filter(
-        expense =>
-          isToday(expense.date)
-      )
+      .filter(expense => isToday(expense.date))
       .reduce(
-        (sum, expense) =>
-          sum + expense.amount,
+        (total, expense) =>
+          total + Number(expense.amount || 0),
         0
       );
 
-  const todayProfit =
-    todaySales -
-    todayExpenses;
+  const profit =
+    todaySales - todayExpenses;
 
-  const todaySalesElement =
-    document.getElementById(
-      "todaySales"
-    );
+  document.getElementById(
+    "todaySales"
+  ).textContent = money(todaySales);
 
-  if (todaySalesElement) {
-    todaySalesElement.textContent =
-      "₦" +
-      todaySales.toLocaleString();
-  }
+  document.getElementById(
+    "todayExpenses"
+  ).textContent = money(todayExpenses);
 
-  const todayExpensesElement =
-    document.getElementById(
-      "todayExpenses"
-    );
+  document.getElementById(
+    "todayProfit"
+  ).textContent = money(profit);
 
-  if (todayExpensesElement) {
-    todayExpensesElement.textContent =
-      "₦" +
-      todayExpenses.toLocaleString();
-  }
+  document.getElementById(
+    "productTotal"
+  ).textContent = products.length;
 
-  const todayProfitElement =
-    document.getElementById(
-      "todayProfit"
-    );
+  const name =
+    businessProfile.businessName ||
+    "MarketMate";
 
-  if (todayProfitElement) {
-    todayProfitElement.textContent =
-      "₦" +
-      todayProfit.toLocaleString();
-  }
-
-  const productTotal =
-    document.getElementById(
-      "productTotal"
-    );
-
-  if (productTotal) {
-    productTotal.textContent =
-      products.length;
-  }
+  document.getElementById(
+    "appBusinessName"
+  ).textContent = name;
 
   displayLowStock();
 }
 
-// =====================================
-// LOW STOCK
-// =====================================
 
 function displayLowStock() {
 
   const list =
-    document.getElementById(
-      "lowStockList"
-    );
+    document.getElementById("lowStockList");
 
   if (!list) return;
 
   const lowStock =
     products.filter(
       product =>
-        product.stock <=
-        product.lowStock
+        Number(product.stock) <=
+        Number(product.lowStock)
     );
 
-  if (
-    lowStock.length === 0
-  ) {
+  if (!lowStock.length) {
+
     list.innerHTML = `
       <div class="empty">
-        ✅ All products have enough stock.
+        <strong>✓ Inventory looks good</strong>
+        <p>No products are currently low in stock.</p>
       </div>
     `;
 
@@ -692,82 +638,67 @@ function displayLowStock() {
   }
 
   list.innerHTML =
-    lowStock
-      .map(
-        product => `
-          <div class="product low-stock">
-            <strong>
-              ⚠️ ${product.name}
-            </strong>
+    lowStock.map(product => `
+      <div class="low-stock-item">
+        <div>
+          <strong>${escapeHTML(product.name)}</strong>
+          <p>
+            Only ${Number(product.stock)} left in stock.
+          </p>
+        </div>
 
-            <p>
-              Only ${product.stock}
-              left in stock.
-            </p>
-          </div>
-        `
-      )
-      .join("");
+        <span>Low stock</span>
+      </div>
+    `).join("");
 }
 
-// =====================================
-// PRODUCTS
-// =====================================
+
+/* =====================================================
+   PRODUCTS
+===================================================== */
 
 function openProductForm() {
 
-  const form =
-    document.getElementById(
-      "productForm"
-    );
+  const modal =
+    document.getElementById("productModal");
 
-  if (form) {
-    form.style.display = "block";
-  }
+  modal.classList.remove("hidden");
 }
+
 
 function closeProductForm() {
 
-  const form =
-    document.getElementById(
-      "productForm"
-    );
+  const modal =
+    document.getElementById("productModal");
 
-  if (form) {
-    form.style.display = "none";
-  }
+  modal.classList.add("hidden");
 }
 
-// =====================================
 
 async function addProduct() {
 
   if (!requireUser()) return;
 
   const name =
-    document.getElementById(
-      "productName"
-    ).value.trim();
+    document.getElementById("productName")
+      .value.trim();
 
   const price =
     Number(
-      document.getElementById(
-        "productPrice"
-      ).value
+      document.getElementById("productPrice")
+        .value
     );
 
   const stock =
     Number(
-      document.getElementById(
-        "productStock"
-      ).value
+      document.getElementById("productStock")
+        .value
     );
 
   const lowStock =
     Number(
-      document.getElementById(
-        "productLowStock"
-      )?.value || 5
+      document.getElementById("productLowStock")
+        .value || 5
     );
 
   if (!name) {
@@ -775,28 +706,29 @@ async function addProduct() {
     return;
   }
 
-  if (price < 0) {
+  if (price < 0 || !Number.isFinite(price)) {
     alert("Enter a valid price.");
     return;
   }
 
-  if (stock < 0) {
+  if (stock < 0 || !Number.isFinite(stock)) {
     alert("Enter a valid stock quantity.");
     return;
   }
 
-  const { data, error } =
+  const {
+    data,
+    error
+  } =
     await supabaseClient
       .from("products")
-      .insert([
-        {
-          user_id: currentUser.id,
-          name,
-          price,
-          stock,
-          low_stock: lowStock
-        }
-      ])
+      .insert({
+        user_id: currentUser.id,
+        name,
+        price,
+        stock,
+        low_stock: lowStock
+      })
       .select()
       .single();
 
@@ -810,72 +742,46 @@ async function addProduct() {
     mapProduct(data)
   );
 
-  alert(
-    "Product added successfully."
-  );
-
-  const nameInput =
-    document.getElementById(
-      "productName"
-    );
-
-  const priceInput =
-    document.getElementById(
-      "productPrice"
-    );
-
-  const stockInput =
-    document.getElementById(
-      "productStock"
-    );
-
-  if (nameInput) {
-    nameInput.value = "";
-  }
-
-  if (priceInput) {
-    priceInput.value = "";
-  }
-
-  if (stockInput) {
-    stockInput.value = "";
-  }
-
-  const lowStockInput =
-    document.getElementById(
-      "productLowStock"
-    );
-
-  if (lowStockInput) {
-    lowStockInput.value = "5";
-  }
+  document.getElementById("productName").value = "";
+  document.getElementById("productPrice").value = "";
+  document.getElementById("productStock").value = "";
+  document.getElementById("productLowStock").value = "5";
 
   closeProductForm();
 
   displayProducts();
-  updateSaleProducts();
   displayPOSProducts();
   updateDashboard();
 }
 
-// =====================================
 
 function displayProducts() {
 
   const list =
-    document.getElementById(
-      "productList"
-    );
+    document.getElementById("productList");
 
   if (!list) return;
 
-  if (
-    products.length === 0
-  ) {
+  const search =
+    (
+      document.getElementById("productSearch")
+        ?.value || ""
+    ).toLowerCase();
+
+  const filtered =
+    products.filter(
+      product =>
+        product.name
+          .toLowerCase()
+          .includes(search)
+    );
+
+  if (!filtered.length) {
+
     list.innerHTML = `
       <div class="empty">
-        <h3>No products yet</h3>
-        <p>Add your first product to start managing your inventory.</p>
+        <h3>No products found</h3>
+        <p>Add your first product to start managing inventory.</p>
       </div>
     `;
 
@@ -883,62 +789,44 @@ function displayProducts() {
   }
 
   list.innerHTML =
-    products
-      .map(
-        product => {
+    filtered.map(product => {
 
-          const stockClass =
-            product.stock <=
-            product.lowStock
-              ? "low-stock"
-              : "";
+      const low =
+        Number(product.stock) <=
+        Number(product.lowStock);
 
-          return `
-            <div class="product-card ${stockClass}">
+      return `
+        <div class="product-row">
 
-              <div class="product-info">
+          <div>
+            <h3>${escapeHTML(product.name)}</h3>
 
-                <h3>
-                  ${escapeHTML(
-                    product.name
-                  )}
-                </h3>
+            <div class="product-meta">
+              <span>
+                Price: <strong>${money(product.price)}</strong>
+              </span>
 
-                <p>
-                  Price:
-                  <strong>
-                    ₦${product.price.toLocaleString()}
-                  </strong>
-                </p>
+              <span class="${low ? "stock-low" : "stock-good"}">
+                Stock: ${product.stock}
+              </span>
 
-                <p>
-                  Stock:
-                  <strong>
-                    ${product.stock}
-                  </strong>
-                </p>
-
-              </div>
-
-              <div class="product-actions">
-
-                <button
-                  class="danger-btn"
-                  onclick="deleteProduct(${product.id})"
-                >
-                  Delete
-                </button>
-
-              </div>
-
+              ${low ? "<span class='stock-low'>Low stock</span>" : ""}
             </div>
-          `;
-        }
-      )
-      .join("");
+          </div>
+
+          <div class="product-actions">
+            <button
+              class="secondary"
+              onclick="deleteProduct(${product.id})">
+              Delete
+            </button>
+          </div>
+
+        </div>
+      `;
+    }).join("");
 }
 
-// =====================================
 
 async function deleteProduct(id) {
 
@@ -946,1337 +834,150 @@ async function deleteProduct(id) {
 
   const product =
     products.find(
-      p => p.id === id
+      item => Number(item.id) === Number(id)
     );
 
   if (!product) return;
 
-  const confirmed =
-    confirm(
+  if (
+    !confirm(
       `Delete ${product.name}?`
-    );
-
-  if (!confirmed) return;
+    )
+  ) {
+    return;
+  }
 
   const { error } =
     await supabaseClient
       .from("products")
       .delete()
       .eq("id", id)
-      .eq(
-        "user_id",
-        currentUser.id
-      );
+      .eq("user_id", currentUser.id);
 
   if (error) {
-    console.error(error);
     alert(error.message);
     return;
   }
 
   products =
     products.filter(
-      p => p.id !== id
+      item =>
+        Number(item.id) !== Number(id)
+    );
+
+  posCart =
+    posCart.filter(
+      item =>
+        Number(item.productId) !== Number(id)
     );
 
   displayProducts();
-  updateSaleProducts();
   displayPOSProducts();
-  updateDashboard();
-
-  alert(
-    "Product deleted successfully."
-  );
-}
-
-// =====================================
-// SALES
-// =====================================
-
-function updateSaleProducts() {
-
-  const select =
-    document.getElementById(
-      "saleProduct"
-    );
-
-  if (!select) return;
-
-  if (
-    products.length === 0
-  ) {
-    select.innerHTML = `
-      <option value="">
-        No products available
-      </option>
-    `;
-
-    return;
-  }
-
-  select.innerHTML = `
-    <option value="">
-      Select product
-    </option>
-
-    ${
-      products
-        .map(
-          product => `
-            <option
-              value="${product.id}"
-            >
-              ${escapeHTML(
-                product.name
-              )}
-              — ₦${product.price.toLocaleString()}
-              — Stock: ${product.stock}
-            </option>
-          `
-        )
-        .join("")
-    }
-  `;
-}
-
-// =====================================
-
-async function recordSale() {
-
-  if (!requireUser()) return;
-
-  const productId =
-    Number(
-      document.getElementById(
-        "saleProduct"
-      ).value
-    );
-
-  const quantity =
-    Number(
-      document.getElementById(
-        "saleQuantity"
-      ).value
-    );
-
-  if (!productId) {
-    alert(
-      "Please select a product."
-    );
-    return;
-  }
-
-  if (
-    !quantity ||
-    quantity <= 0
-  ) {
-    alert(
-      "Enter a valid quantity."
-    );
-    return;
-  }
-
-  const product =
-    products.find(
-      p => p.id === productId
-    );
-
-  if (!product) {
-    alert(
-      "Product not found."
-    );
-    return;
-  }
-
-  if (
-    quantity >
-    product.stock
-  ) {
-    alert(
-      `Only ${product.stock} units available.`
-    );
-    return;
-  }
-
-  const amount =
-    product.price *
-    quantity;
-
-  const receiptNumber =
-    "MM-" +
-    Date.now();
-
-  const { data, error } =
-    await supabaseClient
-      .from("sales")
-      .insert([
-        {
-          user_id:
-            currentUser.id,
-
-          receipt_number:
-            receiptNumber,
-
-          product:
-            product.name,
-
-          quantity,
-
-          amount
-        }
-      ])
-      .select()
-      .single();
-
-  if (error) {
-    console.error(error);
-    alert(error.message);
-    return;
-  }
-
-  const newStock =
-    product.stock -
-    quantity;
-
-  const {
-    data: updatedProduct,
-    error: stockError
-  } =
-    await supabaseClient
-      .from("products")
-      .update({
-        stock: newStock
-      })
-      .eq("id", product.id)
-      .eq(
-        "user_id",
-        currentUser.id
-      )
-      .select()
-      .single();
-
-  if (stockError) {
-    console.error(
-      stockError
-    );
-
-    alert(
-      "Sale recorded, but stock could not be updated."
-    );
-
-    return;
-  }
-
-  const sale =
-    mapSale(data);
-
-  sales.unshift(sale);
-
-  Object.assign(
-    product,
-    mapProduct(
-      updatedProduct
-    )
-  );
-
-  alert(
-    `Sale recorded successfully.\nReceipt: ${receiptNumber}`
-  );
-
-  const quantityInput =
-    document.getElementById(
-      "saleQuantity"
-    );
-
-  if (quantityInput) {
-    quantityInput.value = "";
-  }
-
-  const productSelect =
-    document.getElementById(
-      "saleProduct"
-    );
-
-  if (productSelect) {
-    productSelect.value = "";
-  }
-
-  displayProducts();
-  updateSaleProducts();
-  displayPOSProducts();
-  displayHistory();
-  updateDashboard();
-
-  showReceipt(
-    sale
-  );
-}
-
-// =====================================
-// EXPENSES
-// =====================================
-
-async function recordExpense() {
-
-  if (!requireUser()) return;
-
-  const name =
-    document.getElementById(
-      "expenseName"
-    ).value.trim();
-
-  const amount =
-    Number(
-      document.getElementById(
-        "expenseAmount"
-      ).value
-    );
-
-  if (!name) {
-    alert(
-      "Enter expense name."
-    );
-    return;
-  }
-
-  if (
-    !amount ||
-    amount <= 0
-  ) {
-    alert(
-      "Enter a valid expense amount."
-    );
-    return;
-  }
-
-  const { data, error } =
-    await supabaseClient
-      .from("expenses")
-      .insert([
-        {
-          user_id:
-            currentUser.id,
-
-          name,
-
-          amount
-        }
-      ])
-      .select()
-      .single();
-
-  if (error) {
-    console.error(error);
-    alert(error.message);
-    return;
-  }
-
-  expenses.unshift(
-    mapExpense(data)
-  );
-
-  alert(
-    "Expense recorded successfully."
-  );
-
-  const nameInput =
-    document.getElementById(
-      "expenseName"
-    );
-
-  const amountInput =
-    document.getElementById(
-      "expenseAmount"
-    );
-
-  if (nameInput) {
-    nameInput.value = "";
-  }
-
-  if (amountInput) {
-    amountInput.value = "";
-  }
-
-  displayHistory();
+  renderPOSCart();
   updateDashboard();
 }
 
-// =====================================
-// CUSTOMERS
-// =====================================
 
-function openCustomerForm() {
-
-  const form =
-    document.getElementById(
-      "customerForm"
-    );
-
-  if (form) {
-    form.style.display =
-      "block";
-  }
-}
-
-function closeCustomerForm() {
-
-  const form =
-    document.getElementById(
-      "customerForm"
-    );
-
-  if (form) {
-    form.style.display =
-      "none";
-  }
-}
-
-// =====================================
-
-async function addCustomer() {
-
-  if (!requireUser()) return;
-
-  const name =
-    document.getElementById(
-      "customerName"
-    ).value.trim();
-
-  const phone =
-    document.getElementById(
-      "customerPhone"
-    ).value.trim();
-
-  const email =
-    document.getElementById(
-      "customerEmail"
-    )?.value.trim() || "";
-
-  if (!name) {
-    alert(
-      "Enter customer name."
-    );
-    return;
-  }
-
-  const { data, error } =
-    await supabaseClient
-      .from("customers")
-      .insert([
-        {
-          user_id:
-            currentUser.id,
-
-          name,
-
-          phone,
-
-          email
-        }
-      ])
-      .select()
-      .single();
-
-  if (error) {
-    console.error(error);
-    alert(error.message);
-    return;
-  }
-
-  customers.unshift(data);
-
-  alert(
-    "Customer added successfully."
-  );
-
-  const nameInput =
-    document.getElementById(
-      "customerName"
-    );
-
-  const phoneInput =
-    document.getElementById(
-      "customerPhone"
-    );
-
-  const emailInput =
-    document.getElementById(
-      "customerEmail"
-    );
-
-  if (nameInput) {
-    nameInput.value = "";
-  }
-
-  if (phoneInput) {
-    phoneInput.value = "";
-  }
-
-  if (emailInput) {
-    emailInput.value = "";
-  }
-
-  closeCustomerForm();
-
-  displayCustomers();
-}
-
-// =====================================
-
-function displayCustomers() {
-
-  const list =
-    document.getElementById(
-      "customerList"
-    );
-
-  if (!list) return;
-
-  if (
-    customers.length === 0
-  ) {
-    list.innerHTML = `
-      <div class="empty">
-        <h3>No customers yet</h3>
-        <p>Add your first customer.</p>
-      </div>
-    `;
-
-    return;
-  }
-
-  list.innerHTML =
-    customers
-      .map(
-        customer => `
-          <div class="customer-card">
-
-            <div>
-
-              <h3>
-                ${escapeHTML(
-                  customer.name || ""
-                )}
-              </h3>
-
-              <p>
-                📞 ${
-                  escapeHTML(
-                    customer.phone || "No phone"
-                  )
-                }
-              </p>
-
-              ${
-                customer.email
-                  ? `
-                    <p>
-                      ✉️ ${
-                        escapeHTML(
-                          customer.email
-                        )
-                      }
-                    </p>
-                  `
-                  : ""
-              }
-
-            </div>
-
-            <div>
-
-              ${
-                customer.phone
-                  ? `
-                    <button
-                      class="primary-btn"
-                      onclick="messageCustomer('${escapeAttribute(customer.phone)}')"
-                    >
-                      WhatsApp
-                    </button>
-                  `
-                  : ""
-              }
-
-            </div>
-
-          </div>
-        `
-      )
-      .join("");
-}
-
-// =====================================
-
-function messageCustomer(phone) {
-
-  if (!phone) {
-    alert(
-      "Customer has no phone number."
-    );
-    return;
-  }
-
-  const cleanPhone =
-    phone.replace(
-      /[^0-9]/g,
-      ""
-    );
-
-  const url =
-    "https://wa.me/" +
-    cleanPhone;
-
-  window.open(
-    url,
-    "_blank"
-  );
-}
-
-// =====================================
-// BUSINESS PROFILE
-// =====================================
-
-async function saveBusinessProfile() {
-
-  if (!requireUser()) return;
-
-  const businessName =
-    document.getElementById(
-      "businessName"
-    )?.value.trim() || "";
-
-  const ownerName =
-    document.getElementById(
-      "ownerName"
-    )?.value.trim() || "";
-
-  const phone =
-    document.getElementById(
-      "businessPhone"
-    )?.value.trim() || "";
-
-  const address =
-    document.getElementById(
-      "businessAddress"
-    )?.value.trim() || "";
-
-  const { error } =
-    await supabaseClient
-      .from("businesses")
-      .upsert(
-        {
-          id:
-            currentUser.id,
-
-          business_name:
-            businessName,
-
-          owner_name:
-            ownerName,
-
-          phone,
-
-          address
-        },
-        {
-          onConflict: "id"
-        }
-      );
-
-  if (error) {
-    console.error(error);
-    alert(error.message);
-    return;
-  }
-
-  businessProfile = {
-    businessName,
-    ownerName,
-    phone,
-    address
-  };
-
-  alert(
-    "Business profile saved successfully."
-  );
-}
-
-// =====================================
-
-function loadBusinessProfile() {
-
-  const businessName =
-    document.getElementById(
-      "businessName"
-    );
-
-  const ownerName =
-    document.getElementById(
-      "ownerName"
-    );
-
-  const phone =
-    document.getElementById(
-      "businessPhone"
-    );
-
-  const address =
-    document.getElementById(
-      "businessAddress"
-    );
-
-  if (businessName) {
-    businessName.value =
-      businessProfile.businessName;
-  }
-
-  if (ownerName) {
-    ownerName.value =
-      businessProfile.ownerName;
-  }
-
-  if (phone) {
-    phone.value =
-      businessProfile.phone;
-  }
-
-  if (address) {
-    address.value =
-      businessProfile.address;
-  }
-
-  // Update visible business name
-  document
-    .querySelectorAll(
-      ".business-name"
-    )
-    .forEach(element => {
-      element.textContent =
-        businessProfile.businessName ||
-        "MarketMate";
-    });
-
-  document
-    .querySelectorAll(
-      "[data-business-name]"
-    )
-    .forEach(element => {
-      element.textContent =
-        businessProfile.businessName ||
-        "MarketMate";
-    });
-}
-
-// =====================================
-// HISTORY
-// =====================================
-
-function displayHistory() {
-
-  const list =
-    document.getElementById(
-      "historyList"
-    );
-
-  if (!list) return;
-
-  const combined = [
-    ...sales.map(
-      sale => ({
-        type: "sale",
-        date: sale.date,
-        data: sale
-      })
-    ),
-
-    ...expenses.map(
-      expense => ({
-        type: "expense",
-        date: expense.date,
-        data: expense
-      })
-    )
-  ].sort(
-    (a, b) =>
-      new Date(b.date) -
-      new Date(a.date)
-  );
-
-  if (
-    combined.length === 0
-  ) {
-    list.innerHTML = `
-      <div class="empty">
-        <h3>No transaction history</h3>
-        <p>Your sales and expenses will appear here.</p>
-      </div>
-    `;
-
-    return;
-  }
-
-  list.innerHTML =
-    combined
-      .map(item => {
-
-        if (
-          item.type ===
-          "sale"
-        ) {
-
-          const sale =
-            item.data;
-
-          return `
-            <div class="history-item sale-item">
-
-              <div>
-
-                <strong>
-                  🛒 Sale
-                </strong>
-
-                <h3>
-                  ${escapeHTML(
-                    sale.product || ""
-                  )}
-                </h3>
-
-                <p>
-                  Quantity:
-                  ${sale.quantity}
-                </p>
-
-                <small>
-                  ${formatDate(
-                    sale.date
-                  )}
-                </small>
-
-              </div>
-
-              <div class="history-amount positive">
-                +₦${sale.amount.toLocaleString()}
-              </div>
-
-            </div>
-          `;
-        }
-
-        const expense =
-          item.data;
-
-        return `
-          <div class="history-item expense-item">
-
-            <div>
-
-              <strong>
-                💸 Expense
-              </strong>
-
-              <h3>
-                ${escapeHTML(
-                  expense.name || ""
-                )}
-              </h3>
-
-              <small>
-                ${formatDate(
-                  expense.date
-                )}
-              </small>
-
-            </div>
-
-            <div class="history-amount negative">
-              -₦${expense.amount.toLocaleString()}
-            </div>
-
-          </div>
-        `;
-      })
-      .join("");
-}
-
-// =====================================
-// REPORTS
-// =====================================
-
-function showReport(type) {
-
-  const report =
-    document.getElementById(
-      "reportResult"
-    );
-
-  if (!report) return;
-
-  let filteredSales =
-    sales;
-
-  let filteredExpenses =
-    expenses;
-
-  if (
-    type === "today"
-  ) {
-
-    filteredSales =
-      sales.filter(
-        sale =>
-          isToday(sale.date)
-      );
-
-    filteredExpenses =
-      expenses.filter(
-        expense =>
-          isToday(expense.date)
-      );
-  }
-
-  if (
-    type === "week"
-  ) {
-
-    filteredSales =
-      sales.filter(
-        sale =>
-          isThisWeek(
-            sale.date
-          )
-      );
-
-    filteredExpenses =
-      expenses.filter(
-        expense =>
-          isThisWeek(
-            expense.date
-          )
-      );
-  }
-
-  if (
-    type === "month"
-  ) {
-
-    filteredSales =
-      sales.filter(
-        sale =>
-          isThisMonth(
-            sale.date
-          )
-      );
-
-    filteredExpenses =
-      expenses.filter(
-        expense =>
-          isThisMonth(
-            expense.date
-          )
-      );
-  }
-
-  const totalSales =
-    filteredSales.reduce(
-      (sum, sale) =>
-        sum + sale.amount,
-      0
-    );
-
-  const totalExpenses =
-    filteredExpenses.reduce(
-      (sum, expense) =>
-        sum + expense.amount,
-      0
-    );
-
-  const profit =
-    totalSales -
-    totalExpenses;
-
-  const totalItems =
-    filteredSales.reduce(
-      (sum, sale) =>
-        sum + sale.quantity,
-      0
-    );
-
-  report.innerHTML = `
-    <div class="report-card">
-
-      <h2>
-        ${
-          type === "today"
-            ? "Today's Report"
-            : type === "week"
-              ? "This Week's Report"
-              : "This Month's Report"
-        }
-      </h2>
-
-      <div class="report-grid">
-
-        <div>
-          <span>Total Sales</span>
-          <strong>
-            ₦${totalSales.toLocaleString()}
-          </strong>
-        </div>
-
-        <div>
-          <span>Expenses</span>
-          <strong>
-            ₦${totalExpenses.toLocaleString()}
-          </strong>
-        </div>
-
-        <div>
-          <span>Profit</span>
-          <strong>
-            ₦${profit.toLocaleString()}
-          </strong>
-        </div>
-
-        <div>
-          <span>Items Sold</span>
-          <strong>
-            ${totalItems}
-          </strong>
-        </div>
-
-      </div>
-
-    </div>
-  `;
-}
-
-// =====================================
-// RECEIPTS
-// =====================================
-
-function showReceipt(sale) {
-
-  const modal =
-    document.getElementById(
-      "receiptModal"
-    );
-
-  const receipt =
-    document.getElementById(
-      "receiptContent"
-    );
-
-  if (!modal || !receipt) {
-    return;
-  }
-
-  receipt.innerHTML = `
-    <div class="receipt">
-
-      <div class="receipt-header">
-
-        <h2>
-          ${
-            escapeHTML(
-              businessProfile.businessName ||
-              "MarketMate"
-            )
-          }
-        </h2>
-
-        ${
-          businessProfile.phone
-            ? `
-              <p>
-                ${escapeHTML(
-                  businessProfile.phone
-                )}
-              </p>
-            `
-            : ""
-        }
-
-        ${
-          businessProfile.address
-            ? `
-              <p>
-                ${escapeHTML(
-                  businessProfile.address
-                )}
-              </p>
-            `
-            : ""
-        }
-
-        <hr>
-
-        <h3>
-          SALES RECEIPT
-        </h3>
-
-      </div>
-
-      <div class="receipt-details">
-
-        <p>
-          <strong>
-            Receipt:
-          </strong>
-
-          ${escapeHTML(
-            sale.receiptNumber ||
-            ""
-          )}
-        </p>
-
-        <p>
-          <strong>
-            Date:
-          </strong>
-
-          ${formatDate(
-            sale.date
-          )}
-        </p>
-
-      </div>
-
-      <div class="receipt-item">
-
-        <div>
-          <strong>
-            ${escapeHTML(
-              sale.product || ""
-            )}
-          </strong>
-
-          <p>
-            ${sale.quantity}
-            ×
-            ₦${(
-              sale.amount /
-              sale.quantity
-            ).toLocaleString()}
-          </p>
-        </div>
-
-        <strong>
-          ₦${sale.amount.toLocaleString()}
-        </strong>
-
-      </div>
-
-      <hr>
-
-      <div class="receipt-total">
-
-        <span>
-          TOTAL
-        </span>
-
-        <strong>
-          ₦${sale.amount.toLocaleString()}
-        </strong>
-
-      </div>
-
-      <div class="receipt-footer">
-        <p>
-          Thank you for your business!
-        </p>
-
-        <small>
-          Powered by MarketMate
-        </small>
-      </div>
-
-    </div>
-  `;
-
-  modal.style.display =
-    "flex";
-}
-
-// =====================================
-
-function closeReceipt() {
-
-  const modal =
-    document.getElementById(
-      "receiptModal"
-    );
-
-  if (modal) {
-    modal.style.display =
-      "none";
-  }
-}
-
-// =====================================
-
-async function shareReceipt() {
-
-  const receipt =
-    document.getElementById(
-      "receiptContent"
-    );
-
-  if (!receipt) return;
-
-  const text =
-    receipt.innerText;
-
-  if (
-    navigator.share
-  ) {
-
-    try {
-
-      await navigator.share({
-        title:
-          "MarketMate Receipt",
-        text
-      });
-
-    } catch (error) {
-
-      console.log(
-        "Share cancelled."
-      );
-
-    }
-
-  } else {
-
-    try {
-
-      await navigator.clipboard.writeText(
-        text
-      );
-
-      alert(
-        "Receipt copied to clipboard."
-      );
-
-    } catch (error) {
-
-      alert(
-        "Could not share receipt."
-      );
-    }
-  }
-}
-
-// =====================================
-// POS
-// =====================================
-
-let posCart = [];
-
-// =====================================
+/* =====================================================
+   POS
+===================================================== */
 
 function displayPOSProducts() {
 
-  const list =
+  const grid =
     document.getElementById(
-      "posProducts"
+      "posProductGrid"
     );
 
-  if (!list) return;
+  if (!grid) return;
 
-  if (
-    products.length === 0
-  ) {
-    list.innerHTML = `
+  const search =
+    (
+      document.getElementById("posSearch")
+        ?.value || ""
+    ).toLowerCase();
+
+  const filtered =
+    products.filter(
+      product =>
+        product.name
+          .toLowerCase()
+          .includes(search)
+    );
+
+  if (!filtered.length) {
+
+    grid.innerHTML = `
       <div class="empty">
-        <h3>No products</h3>
-        <p>Add products to start selling.</p>
+        <h3>No products available</h3>
+        <p>Add products to begin selling.</p>
       </div>
     `;
 
     return;
   }
 
-  list.innerHTML =
-    products
-      .map(
-        product => {
+  grid.innerHTML =
+    filtered.map(product => {
 
-          const disabled =
-            product.stock <= 0;
+      const outOfStock =
+        Number(product.stock) <= 0;
 
-          return `
-            <button
-              class="pos-product ${
-                disabled
-                  ? "disabled"
-                  : ""
-              }"
-              ${
-                disabled
-                  ? "disabled"
-                  : `onclick="addToPOSCart(${product.id})"`
-              }
-            >
+      return `
+        <button
+          class="pos-product"
+          ${outOfStock ? "disabled" : ""}
+          onclick="addToPOSCart(${product.id})">
 
-              <span class="pos-product-name">
-                ${escapeHTML(
-                  product.name
-                )}
-              </span>
+          <span class="pos-product-name">
+            ${escapeHTML(product.name)}
+          </span>
 
-              <span class="pos-product-price">
-                ₦${product.price.toLocaleString()}
-              </span>
+          <span class="pos-product-price">
+            ${money(product.price)}
+          </span>
 
-              <small>
-                ${
-                  disabled
-                    ? "Out of stock"
-                    : `${product.stock} in stock`
-                }
-              </small>
+          <small>
+            ${
+              outOfStock
+                ? "Out of stock"
+                : `${product.stock} available`
+            }
+          </small>
 
-            </button>
-          `;
-        }
-      )
-      .join("");
+        </button>
+      `;
+    }).join("");
 }
 
-// =====================================
 
 function addToPOSCart(id) {
 
   const product =
     products.find(
-      p => p.id === id
+      item =>
+        Number(item.id) === Number(id)
     );
 
   if (!product) return;
 
-  if (
-    product.stock <= 0
-  ) {
-    alert(
-      "This product is out of stock."
-    );
+  if (Number(product.stock) <= 0) {
+    alert("This product is out of stock.");
     return;
   }
 
   const existing =
     posCart.find(
       item =>
-        item.productId === id
+        Number(item.productId) ===
+        Number(id)
     );
 
   if (existing) {
 
     if (
       existing.quantity >=
-      product.stock
+      Number(product.stock)
     ) {
       alert(
         "You cannot add more than the available stock."
@@ -2290,44 +991,35 @@ function addToPOSCart(id) {
   } else {
 
     posCart.push({
-      productId: id,
+      productId: product.id,
       quantity: 1
     });
+
   }
 
   renderPOSCart();
 }
 
-// =====================================
 
 function renderPOSCart() {
 
   const cart =
-    document.getElementById(
-      "posCart"
-    );
+    document.getElementById("posCart");
 
   const totalElement =
-    document.getElementById(
-      "posTotal"
-    );
+    document.getElementById("posTotal");
 
   if (!cart) return;
 
-  if (
-    posCart.length === 0
-  ) {
+  if (!posCart.length) {
 
     cart.innerHTML = `
       <div class="empty">
-        Cart is empty
+        🛒 Your cart is empty.
       </div>
     `;
 
-    if (totalElement) {
-      totalElement.textContent =
-        "₦0";
-    }
+    totalElement.textContent = "₦0";
 
     return;
   }
@@ -2335,209 +1027,180 @@ function renderPOSCart() {
   let total = 0;
 
   cart.innerHTML =
-    posCart
-      .map(
-        item => {
+    posCart.map(item => {
 
-          const product =
-            products.find(
-              p =>
-                p.id ===
-                item.productId
-            );
+      const product =
+        products.find(
+          p =>
+            Number(p.id) ===
+            Number(item.productId)
+        );
 
-          if (!product) {
-            return "";
-          }
+      if (!product) return "";
 
-          const subtotal =
-            product.price *
-            item.quantity;
+      const subtotal =
+        Number(product.price) *
+        Number(item.quantity);
 
-          total += subtotal;
+      total += subtotal;
 
-          return `
-            <div class="cart-item">
+      return `
+        <div class="cart-item">
 
-              <div>
+          <div class="cart-product">
+            <strong>
+              ${escapeHTML(product.name)}
+            </strong>
 
-                <strong>
-                  ${escapeHTML(
-                    product.name
-                  )}
-                </strong>
+            <small>
+              ${money(product.price)} each
+            </small>
+          </div>
 
-                <p>
-                  ₦${product.price.toLocaleString()}
-                  ×
-                  ${item.quantity}
-                </p>
+          <div class="cart-controls">
 
-              </div>
+            <button
+              type="button"
+              onclick="changePOSQuantity(${product.id}, -1)">
+              −
+            </button>
 
-              <div class="cart-controls">
+            <strong>${item.quantity}</strong>
 
-                <button
-                  onclick="changePOSQuantity(${product.id}, -1)"
-                >
-                  −
-                </button>
+            <button
+              type="button"
+              onclick="changePOSQuantity(${product.id}, 1)">
+              +
+            </button>
 
-                <span>
-                  ${item.quantity}
-                </span>
+          </div>
 
-                <button
-                  onclick="changePOSQuantity(${product.id}, 1)"
-                >
-                  +
-                </button>
+        </div>
+      `;
+    }).join("");
 
-              </div>
-
-              <strong>
-                ₦${subtotal.toLocaleString()}
-              </strong>
-
-            </div>
-          `;
-        }
-      )
-      .join("");
-
-  if (totalElement) {
-    totalElement.textContent =
-      "₦" +
-      total.toLocaleString();
-  }
+  totalElement.textContent =
+    money(total);
 }
 
-// =====================================
 
-function changePOSQuantity(
-  id,
-  change
-) {
+function changePOSQuantity(id, change) {
 
   const item =
     posCart.find(
       cartItem =>
-        cartItem.productId ===
-        id
+        Number(cartItem.productId) ===
+        Number(id)
     );
 
   const product =
     products.find(
-      p => p.id === id
+      p =>
+        Number(p.id) ===
+        Number(id)
     );
 
-  if (!item || !product) {
-    return;
-  }
+  if (!item || !product) return;
 
   item.quantity += change;
 
-  if (
-    item.quantity <= 0
-  ) {
+  if (item.quantity <= 0) {
 
     posCart =
       posCart.filter(
         cartItem =>
-          cartItem.productId !==
-          id
+          Number(cartItem.productId) !==
+          Number(id)
       );
 
   } else if (
     item.quantity >
-    product.stock
+    Number(product.stock)
   ) {
 
     item.quantity =
-      product.stock;
+      Number(product.stock);
 
     alert(
-      "You cannot exceed available stock."
+      "You cannot sell more than the available stock."
     );
   }
 
   renderPOSCart();
 }
 
-// =====================================
+
+function clearPOSCart() {
+
+  if (!posCart.length) return;
+
+  if (
+    confirm("Clear all items from the cart?")
+  ) {
+    posCart = [];
+    renderPOSCart();
+  }
+}
+
+
+/* =====================================================
+   CHECKOUT
+===================================================== */
 
 async function checkoutPOS() {
 
   if (!requireUser()) return;
 
-  if (
-    posCart.length === 0
-  ) {
-    alert(
-      "Your cart is empty."
-    );
+  if (!posCart.length) {
+    alert("Your cart is empty.");
     return;
-  }
-
-  const confirmed =
-    confirm(
-      "Complete this sale?"
-    );
-
-  if (!confirmed) {
-    return;
-  }
-
-  for (
-    const item of posCart
-  ) {
-
-    const product =
-      products.find(
-        p =>
-          p.id ===
-          item.productId
-      );
-
-    if (!product) {
-      continue;
-    }
-
-    if (
-      item.quantity >
-      product.stock
-    ) {
-      alert(
-        `${product.name} does not have enough stock.`
-      );
-      return;
-    }
   }
 
   const receiptNumber =
     "MM-" +
     Date.now();
 
-  const createdSales = [];
+  const completedSales = [];
 
-  for (
-    const item of posCart
-  ) {
+  for (const item of posCart) {
 
     const product =
       products.find(
         p =>
-          p.id ===
-          item.productId
+          Number(p.id) ===
+          Number(item.productId)
       );
 
-    if (!product) {
-      continue;
+    if (!product) continue;
+
+    if (
+      Number(item.quantity) >
+      Number(product.stock)
+    ) {
+      alert(
+        `${product.name} does not have enough stock.`
+      );
+
+      return;
     }
 
-    const amount =
-      product.price *
-      item.quantity;
+  }
+
+
+  for (const item of posCart) {
+
+    const product =
+      products.find(
+        p =>
+          Number(p.id) ===
+          Number(item.productId)
+      );
+
+    if (!product) continue;
+
+    const total =
+      Number(product.price) *
+      Number(item.quantity);
 
     const {
       data,
@@ -2545,23 +1208,13 @@ async function checkoutPOS() {
     } =
       await supabaseClient
         .from("sales")
-        .insert([
-          {
-            user_id:
-              currentUser.id,
-
-            receipt_number:
-              receiptNumber,
-
-            product:
-              product.name,
-
-            quantity:
-              item.quantity,
-
-            amount
-          }
-        ])
+        .insert({
+          user_id: currentUser.id,
+          product: product.name,
+          quantity: item.quantity,
+          amount: total,
+          receipt_number: receiptNumber
+        })
         .select()
         .single();
 
@@ -2570,799 +1223,90 @@ async function checkoutPOS() {
       console.error(error);
 
       alert(
-        "Could not complete the sale: " +
+        "Could not save sale: " +
         error.message
       );
 
       return;
     }
 
-    createdSales.push(
-      mapSale(data)
-    );
-
-    const newStock =
-      product.stock -
-      item.quantity;
-
     const {
-      data:
-        updatedProduct,
-      error:
-        stockError
+      error: stockError
     } =
       await supabaseClient
         .from("products")
         .update({
           stock:
-            newStock
+            Number(product.stock) -
+            Number(item.quantity)
         })
-        .eq(
-          "id",
-          product.id
-        )
-        .eq(
-          "user_id",
-          currentUser.id
-        )
-        .select()
-        .single();
+        .eq("id", product.id)
+        .eq("user_id", currentUser.id);
 
     if (stockError) {
 
-      console.error(
-        stockError
-      );
-
       alert(
-        "Sale was recorded but stock update failed."
+        "Sale saved but stock could not be updated: " +
+        stockError.message
       );
 
       return;
     }
 
-    Object.assign(
-      product,
-      mapProduct(
-        updatedProduct
-      )
+    product.stock -=
+      Number(item.quantity);
+
+    completedSales.push(
+      mapSale(data)
     );
+
   }
 
+
   sales.unshift(
-    ...createdSales
+    ...completedSales
   );
+
+  const receiptSale =
+    completedSales[0];
 
   posCart = [];
 
   renderPOSCart();
-
-  displayProducts();
   displayPOSProducts();
-  updateSaleProducts();
+  displayProducts();
+  updateDashboard();
   displayHistory();
-  updateDashboard();
 
-  alert(
-    `Sale completed successfully!\nReceipt: ${receiptNumber}`
-  );
-
-  if (
-    createdSales.length === 1
-  ) {
-    showReceipt(
-      createdSales[0]
-    );
-  }
+  showReceipt(receiptSale);
 }
 
-// =====================================
 
-function refreshPOS() {
-  displayPOSProducts();
-  renderPOSCart();
-  updateDashboard();
-}
-
-// =====================================
-// HELPERS
-// =====================================
-
-function escapeHTML(value) {
-
-  return String(
-    value ?? ""
-  )
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
-    );
-}
-
-// =====================================
-
-function escapeAttribute(value) {
-
-  return String(
-    value ?? ""
-  )
-    .replace(
-      /\\/g,
-      "\\\\"
-    )
-    .replace(
-      /'/g,
-      "\\'"
-    );
-}
-
-// =====================================
-
-function formatDate(dateString) {
-
-  if (!dateString) {
-    return "";
-  }
-
-  const date =
-    new Date(dateString);
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "";
-  }
-
-  return date.toLocaleString(
-    "en-NG",
-    {
-      dateStyle:
-        "medium",
-      timeStyle:
-        "short"
-    }
-  );
-}
-
-// =====================================
-// INITIALIZE
-// =====================================
-
-document.addEventListener(
-  "DOMContentLoaded",
-  async () => {
-
-    console.log(
-      "MarketMate starting..."
-    );
-
-    displayPOSProducts();
-    renderPOSCart();
-
-    await checkUser();
-
-  }
-);
-
-// =====================================
-// GLOBAL FUNCTIONS
-// =====================================
-
-window.signupUser =
-  signupUser;
-
-window.loginUser =
-  loginUser;
-
-window.logoutUser =
-  logoutUser;
-
-window.logout =
-  logout;
-
-window.showSignup =
-  showSignup;
-
-window.showLogin =
-  showLogin;
-
-window.showApp =
-  showApp;
-
-window.showPage =
-  showPage;
-
-window.openProductForm =
-  openProductForm;
-
-window.closeProductForm =
-  closeProductForm;
-
-window.addProduct =
-  addProduct;
-
-window.deleteProduct =
-  deleteProduct;
-
-window.recordSale =
-  recordSale;
-
-window.recordExpense =
-  recordExpense;
-
-window.openCustomerForm =
-  openCustomerForm;
-
-window.closeCustomerForm =
-  closeCustomerForm;
-
-window.addCustomer =
-  addCustomer;
-
-window.messageCustomer =
-  messageCustomer;
-
-window.saveBusinessProfile =
-  saveBusinessProfile;
-
-window.showReport =
-  showReport;
-
-window.showReceipt =
-  showReceipt;
-
-window.closeReceipt =
-  closeReceipt;
-
-window.shareReceipt =
-  shareReceipt;
-
-window.displayPOSProducts =
-  displayPOSProducts;
-
-window.addToPOSCart =
-  addToPOSCart;
-
-window.renderPOSCart =
-  renderPOSCart;
-
-window.changePOSQuantity =
-  changePOSQuantity;
-
-window.checkoutPOS =
-  checkoutPOS;
-
-window.refreshPOS =
-  refreshPOS;
-
-console.log(
-  "MarketMate loaded successfully."
-);
-  const modal =
-    document.getElementById(
-      "productModal"
-    );
-
-  if (modal) {
-    modal.style.display =
-      "flex";
-  }
-}
-
-// =====================================
-
-function closeProductForm() {
-
-  const modal =
-    document.getElementById(
-      "productModal"
-    );
-
-  if (modal) {
-    modal.style.display =
-      "none";
-  }
-}
-
-// =====================================
-
-async function addProduct() {
-
-  if (!requireUser()) return;
-
-  const name =
-    document
-      .getElementById(
-        "productName"
-      )
-      .value
-      .trim();
-
-  const price =
-    Number(
-      document.getElementById(
-        "productPrice"
-      ).value
-    );
-
-  const stock =
-    Number(
-      document.getElementById(
-        "productStock"
-      ).value
-    );
-
-  const lowStock =
-    Number(
-      document.getElementById(
-        "productLowStock"
-      ).value
-    );
-
-  if (
-    !name ||
-    price <= 0 ||
-    stock < 0
-  ) {
-    alert(
-      "Please enter valid product information."
-    );
-
-    return;
-  }
-
-  const {
-    data,
-    error
-  } =
-    await supabaseClient
-      .from("products")
-      .insert({
-        user_id:
-          currentUser.id,
-
-        name:
-          name,
-
-        price:
-          price,
-
-        stock:
-          stock,
-
-        low_stock:
-          Number.isFinite(
-            lowStock
-          )
-            ? lowStock
-            : 5
-      })
-      .select()
-      .single();
-
-  if (error) {
-
-    console.error(error);
-
-    alert(
-      "Could not save product: " +
-      error.message
-    );
-
-    return;
-  }
-
-  products.unshift(
-    mapProduct(data)
-  );
-
-  document.getElementById(
-    "productName"
-  ).value = "";
-
-  document.getElementById(
-    "productPrice"
-  ).value = "";
-
-  document.getElementById(
-    "productStock"
-  ).value = "";
-
-  document.getElementById(
-    "productLowStock"
-  ).value = "5";
-
-  closeProductForm();
-
-  displayProducts();
-  updateSaleProducts();
-  updateDashboard();
-
-  alert(
-    "Product added successfully!"
-  );
-}
-
-// =====================================
-
-function displayProducts() {
-
-  const list =
-    document.getElementById(
-      "productList"
-    );
-
-  if (!list) return;
-
-  const search =
-    document
-      .getElementById(
-        "productSearch"
-      )
-      ?.value
-      .toLowerCase() || "";
-
-  const filtered =
-    products.filter(
-      product =>
-        product.name
-          .toLowerCase()
-          .includes(search)
-    );
-
-  if (
-    filtered.length === 0
-  ) {
-
-    list.innerHTML = `
-      <div class="empty">
-        No products found.
-      </div>
-    `;
-
-    return;
-  }
-
-  list.innerHTML =
-    filtered
-      .map(
-        product => `
-          <div class="product
-            ${
-              product.stock <=
-              product.lowStock
-                ? "low-stock"
-                : "good-stock"
-            }">
-
-            <strong>
-              ${product.name}
-            </strong>
-
-            <p>
-              Price:
-              ₦${product.price.toLocaleString()}
-            </p>
-
-            <p>
-              Stock:
-              ${product.stock}
-            </p>
-
-            ${
-              product.stock <=
-              product.lowStock
-                ? `
-                  <p class="danger">
-                    ⚠️ Low stock
-                  </p>
-                `
-                : ""
-            }
-
-            <button
-              class="secondary"
-              onclick="deleteProduct(${product.id})">
-              Delete
-            </button>
-
-          </div>
-        `
-      )
-      .join("");
-}
-
-// =====================================
-
-async function deleteProduct(id) {
-
-  if (!requireUser()) return;
-
-  if (
-    !confirm(
-      "Delete this product?"
-    )
-  ) {
-    return;
-  }
-
-  const { error } =
-    await supabaseClient
-      .from("products")
-      .delete()
-      .eq("id", id)
-      .eq(
-        "user_id",
-        currentUser.id
-      );
-
-  if (error) {
-
-    console.error(error);
-
-    alert(
-      "Could not delete product: " +
-      error.message
-    );
-
-    return;
-  }
-
-  products =
-    products.filter(
-      product =>
-        Number(product.id) !==
-        Number(id)
-    );
-
-  displayProducts();
-  updateSaleProducts();
-  updateDashboard();
-}
-
-// =====================================
-// SALES
-// =====================================
+/* =====================================================
+   OLD SALE COMPATIBILITY
+===================================================== */
 
 function updateSaleProducts() {
-
-  const select =
-    document.getElementById(
-      "saleProduct"
-    );
-
-  if (!select) return;
-
-  if (
-    products.length === 0
-  ) {
-
-    select.innerHTML =
-      `<option>
-        No products available
-      </option>`;
-
-    return;
-  }
-
-  select.innerHTML =
-    products
-      .map(
-        product => `
-          <option
-            value="${product.id}">
-            ${product.name}
-            - ₦${product.price.toLocaleString()}
-            (${product.stock} left)
-          </option>
-        `
-      )
-      .join("");
+  /* Kept for compatibility with older HTML. */
 }
-
-// =====================================
 
 async function recordSale() {
-
-  if (!requireUser()) return;
-
-  const productId =
-    Number(
-      document.getElementById(
-        "saleProduct"
-      ).value
-    );
-
-  const quantity =
-    Number(
-      document.getElementById(
-        "saleQuantity"
-      ).value
-    );
-
-  const product =
-    products.find(
-      p =>
-        Number(p.id) ===
-        productId
-    );
-
-  if (!product) {
-    alert(
-      "Please add a product first."
-    );
-
-    return;
-  }
-
-  if (quantity <= 0) {
-    alert(
-      "Enter a valid quantity."
-    );
-
-    return;
-  }
-
-  if (
-    quantity >
-    product.stock
-  ) {
-    alert(
-      "Not enough stock available."
-    );
-
-    return;
-  }
-
-  const total =
-    product.price *
-    quantity;
-
-  const receiptNumber =
-    "MM-" +
-    Date.now();
-
-  // Update stock first
-  const {
-    error: stockError
-  } =
-    await supabaseClient
-      .from("products")
-      .update({
-        stock:
-          product.stock -
-          quantity
-      })
-      .eq(
-        "id",
-        product.id
-      )
-      .eq(
-        "user_id",
-        currentUser.id
-      );
-
-  if (stockError) {
-
-    console.error(
-      stockError
-    );
-
-    alert(
-      "Could not update stock: " +
-      stockError.message
-    );
-
-    return;
-  }
-
-  // Save sale
-  const {
-    data,
-    error
-  } =
-    await supabaseClient
-      .from("sales")
-      .insert({
-        user_id:
-          currentUser.id,
-
-        product:
-          product.name,
-
-        quantity:
-          quantity,
-
-        amount:
-          total,
-
-        receipt_number:
-          receiptNumber
-      })
-      .select()
-      .single();
-
-  if (error) {
-
-    // Restore stock
-    await supabaseClient
-      .from("products")
-      .update({
-        stock:
-          product.stock
-      })
-      .eq(
-        "id",
-        product.id
-      )
-      .eq(
-        "user_id",
-        currentUser.id
-      );
-
-    console.error(error);
-
-    alert(
-      "Could not save sale: " +
-      error.message
-    );
-
-    return;
-  }
-
-  product.stock -=
-    quantity;
-
-  const sale =
-    mapSale(data);
-
-  sales.unshift(sale);
-
-  document.getElementById(
-    "saleQuantity"
-  ).value = "";
-
-  updateDashboard();
-  displayProducts();
-  updateSaleProducts();
-  displayHistory();
-
-  showReceipt(sale);
+  await checkoutPOS();
 }
 
-// =====================================
-// EXPENSES
-// =====================================
+
+/* =====================================================
+   EXPENSES
+===================================================== */
 
 async function recordExpense() {
 
   if (!requireUser()) return;
 
   const name =
-    document
-      .getElementById(
-        "expenseName"
-      )
-      .value
-      .trim();
+    document.getElementById(
+      "expenseName"
+    ).value.trim();
 
   const amount =
     Number(
@@ -3371,14 +1315,8 @@ async function recordExpense() {
       ).value
     );
 
-  if (
-    !name ||
-    amount <= 0
-  ) {
-    alert(
-      "Enter a valid expense."
-    );
-
+  if (!name || amount <= 0) {
+    alert("Enter a valid expense.");
     return;
   }
 
@@ -3389,27 +1327,15 @@ async function recordExpense() {
     await supabaseClient
       .from("expenses")
       .insert({
-        user_id:
-          currentUser.id,
-
-        name:
-          name,
-
-        amount:
-          amount
+        user_id: currentUser.id,
+        name,
+        amount
       })
       .select()
       .single();
 
   if (error) {
-
-    console.error(error);
-
-    alert(
-      "Could not save expense: " +
-      error.message
-    );
-
+    alert(error.message);
     return;
   }
 
@@ -3428,69 +1354,45 @@ async function recordExpense() {
   updateDashboard();
   displayHistory();
 
-  alert(
-    "Expense saved successfully!"
-  );
+  alert("Expense saved successfully.");
 }
 
-// =====================================
-// CUSTOMERS
-// =====================================
+
+/* =====================================================
+   CUSTOMERS
+===================================================== */
 
 function openCustomerForm() {
 
-  const modal =
-    document.getElementById(
-      "customerModal"
-    );
-
-  if (modal) {
-    modal.style.display =
-      "flex";
-  }
+  document
+    .getElementById("customerModal")
+    .classList.remove("hidden");
 }
 
-// =====================================
 
 function closeCustomerForm() {
 
-  const modal =
-    document.getElementById(
-      "customerModal"
-    );
-
-  if (modal) {
-    modal.style.display =
-      "none";
-  }
+  document
+    .getElementById("customerModal")
+    .classList.add("hidden");
 }
 
-// =====================================
 
 async function addCustomer() {
 
   if (!requireUser()) return;
 
   const name =
-    document
-      .getElementById(
-        "customerName"
-      )
-      .value
-      .trim();
+    document.getElementById(
+      "customerName"
+    ).value.trim();
 
   const phone =
-    document
-      .getElementById(
-        "customerPhone"
-      )
-      .value
-      .trim();
+    document.getElementById(
+      "customerPhone"
+    ).value.trim();
 
-  if (
-    !name ||
-    !phone
-  ) {
+  if (!name || !phone) {
     alert(
       "Enter customer name and phone number."
     );
@@ -3505,27 +1407,15 @@ async function addCustomer() {
     await supabaseClient
       .from("customers")
       .insert({
-        user_id:
-          currentUser.id,
-
-        name:
-          name,
-
-        phone:
-          phone
+        user_id: currentUser.id,
+        name,
+        phone
       })
       .select()
       .single();
 
   if (error) {
-
-    console.error(error);
-
-    alert(
-      "Could not save customer: " +
-      error.message
-    );
-
+    alert(error.message);
     return;
   }
 
@@ -3542,13 +1432,8 @@ async function addCustomer() {
   closeCustomerForm();
 
   displayCustomers();
-
-  alert(
-    "Customer added successfully!"
-  );
 }
 
-// =====================================
 
 function displayCustomers() {
 
@@ -3560,30 +1445,29 @@ function displayCustomers() {
   if (!list) return;
 
   const search =
-    document
-      .getElementById(
+    (
+      document.getElementById(
         "customerSearch"
-      )
-      ?.value
-      .toLowerCase() || "";
+      )?.value || ""
+    ).toLowerCase();
 
   const filtered =
-    customers.filter(
-      customer =>
-        customer.name
-          .toLowerCase()
-          .includes(search) ||
-        customer.phone
-          .includes(search)
+    customers.filter(customer =>
+      String(customer.name || "")
+        .toLowerCase()
+        .includes(search) ||
+
+      String(customer.phone || "")
+        .toLowerCase()
+        .includes(search)
     );
 
-  if (
-    filtered.length === 0
-  ) {
+  if (!filtered.length) {
 
     list.innerHTML = `
       <div class="empty">
-        No customers found.
+        <h3>No customers found</h3>
+        <p>Add your first customer.</p>
       </div>
     `;
 
@@ -3591,32 +1475,36 @@ function displayCustomers() {
   }
 
   list.innerHTML =
-    filtered
-      .map(
-        customer => `
-          <div class="customer">
+    filtered.map(customer => {
 
-            <strong>
-              ${customer.name}
-            </strong>
+      const safePhone =
+        String(customer.phone || "")
+          .replace(/\D/g, "");
+
+      return `
+        <div class="customer-row">
+
+          <div>
+            <h3>
+              ${escapeHTML(customer.name)}
+            </h3>
 
             <p>
-              📞 ${customer.phone}
+              📞 ${escapeHTML(customer.phone)}
             </p>
-
-            <button
-              class="secondary"
-              onclick="messageCustomer('${customer.phone}')">
-              📲 WhatsApp
-            </button>
-
           </div>
-        `
-      )
-      .join("");
+
+          <button
+            class="secondary"
+            onclick="messageCustomer('${safePhone}')">
+            📲 WhatsApp
+          </button>
+
+        </div>
+      `;
+    }).join("");
 }
 
-// =====================================
 
 function messageCustomer(phone) {
 
@@ -3633,76 +1521,48 @@ function messageCustomer(phone) {
     "_blank"
   );
 }
-// =====================================
-// BUSINESS PROFILE
-// =====================================
+
+
+/* =====================================================
+   BUSINESS PROFILE
+===================================================== */
 
 async function saveBusinessProfile() {
 
   if (!requireUser()) return;
 
   const businessName =
-    document
-      .getElementById(
-        "businessName"
-      )
-      ?.value
-      .trim() || "";
+    document.getElementById(
+      "businessName"
+    ).value.trim();
 
   const ownerName =
-    document
-      .getElementById(
-        "ownerName"
-      )
-      ?.value
-      .trim() || "";
+    document.getElementById(
+      "ownerName"
+    ).value.trim();
 
   const phone =
-    document
-      .getElementById(
-        "businessPhone"
-      )
-      ?.value
-      .trim() || "";
+    document.getElementById(
+      "businessPhone"
+    ).value.trim();
 
   const address =
-    document
-      .getElementById(
-        "businessAddress"
-      )
-      ?.value
-      .trim() || "";
+    document.getElementById(
+      "businessAddress"
+    ).value.trim();
 
   const {
-    data,
     error
   } =
     await supabaseClient
       .from("businesses")
-      .upsert(
-        {
-          id:
-            currentUser.id,
-
-          business_name:
-            businessName,
-
-          owner_name:
-            ownerName,
-
-          phone:
-            phone,
-
-          address:
-            address
-        },
-        {
-          onConflict:
-            "id"
-        }
-      )
-      .select()
-      .single();
+      .upsert({
+        id: currentUser.id,
+        business_name: businessName,
+        owner_name: ownerName,
+        phone,
+        address
+      });
 
   if (error) {
 
@@ -3717,102 +1577,53 @@ async function saveBusinessProfile() {
   }
 
   businessProfile = {
-    businessName:
-      data.business_name || "",
-
-    ownerName:
-      data.owner_name || "",
-
-    phone:
-      data.phone || "",
-
-    address:
-      data.address || ""
+    businessName,
+    ownerName,
+    phone,
+    address
   };
 
-  loadBusinessProfile();
+  updateDashboard();
 
   alert(
-    "Business profile saved successfully!"
+    "Business profile saved successfully."
   );
 }
 
-// =====================================
 
 function loadBusinessProfile() {
 
-  const businessName =
-    document.getElementById(
-      "businessName"
-    );
+  document.getElementById(
+    "businessName"
+  ).value =
+    businessProfile.businessName || "";
 
-  const ownerName =
-    document.getElementById(
-      "ownerName"
-    );
+  document.getElementById(
+    "ownerName"
+  ).value =
+    businessProfile.ownerName || "";
 
-  const phone =
-    document.getElementById(
-      "businessPhone"
-    );
+  document.getElementById(
+    "businessPhone"
+  ).value =
+    businessProfile.phone || "";
 
-  const address =
-    document.getElementById(
-      "businessAddress"
-    );
+  document.getElementById(
+    "businessAddress"
+  ).value =
+    businessProfile.address || "";
 
-  if (businessName) {
-    businessName.value =
-      businessProfile.businessName ||
-      "";
-  }
-
-  if (ownerName) {
-    ownerName.value =
-      businessProfile.ownerName ||
-      "";
-  }
-
-  if (phone) {
-    phone.value =
-      businessProfile.phone ||
-      "";
-  }
-
-  if (address) {
-    address.value =
-      businessProfile.address ||
-      "";
-  }
-
-  document
-    .querySelectorAll(
-      ".business-name"
-    )
-    .forEach(element => {
-
-      element.textContent =
-        businessProfile.businessName ||
-        "MarketMate";
-
-    });
-
-  document
-    .querySelectorAll(
-      "[data-business-name]"
-    )
-    .forEach(element => {
-
-      element.textContent =
-        businessProfile.businessName ||
-        "MarketMate";
-
-    });
+  document.getElementById(
+    "appBusinessName"
+  ).textContent =
+    businessProfile.businessName ||
+    "MarketMate";
 }
 
-// =====================================
-// TRANSACTION HISTORY
-// =====================================
+
+/* =====================================================
+   HISTORY
+===================================================== */
 
 function displayHistory() {
 
@@ -3823,648 +1634,230 @@ function displayHistory() {
 
   if (!list) return;
 
-  const allTransactions = [];
+  const transactions = [
+    ...sales.map(sale => ({
+      type: "Sale",
+      name: sale.product,
+      amount: sale.amount,
+      date: sale.date,
+      receipt: sale.receiptNumber
+    })),
 
-  sales.forEach(
-    sale => {
-
-      allTransactions.push({
-        type:
-          "sale",
-
-        date:
-          sale.date,
-
-        data:
-          sale
-      });
-
-    }
-  );
-
-  expenses.forEach(
-    expense => {
-
-      allTransactions.push({
-        type:
-          "expense",
-
-        date:
-          expense.date,
-
-        data:
-          expense
-      });
-
-    }
-  );
-
-  allTransactions.sort(
-    (a, b) =>
+    ...expenses.map(expense => ({
+      type: "Expense",
+      name: expense.name,
+      amount: expense.amount,
+      date: expense.date,
+      receipt: ""
+    }))
+  ]
+  .sort(
+    (a,b) =>
       new Date(b.date) -
       new Date(a.date)
   );
 
-  if (
-    allTransactions.length ===
-    0
-  ) {
+  if (!transactions.length) {
 
     list.innerHTML = `
       <div class="empty">
-        <h3>
-          No transactions yet
-        </h3>
-
-        <p>
-          Sales and expenses will
-          appear here.
-        </p>
+        <h3>No transactions yet</h3>
+        <p>Your sales and expenses will appear here.</p>
       </div>
     `;
+
+    showReport("today");
 
     return;
   }
 
   list.innerHTML =
-    allTransactions
-      .map(
-        transaction => {
+    transactions.map(item => `
+      <div class="transaction-row">
 
-          if (
-            transaction.type ===
-            "sale"
-          ) {
+        <div>
+          <strong>
+            ${escapeHTML(item.name)}
+          </strong>
 
-            const sale =
-              transaction.data;
+          <p>
+            ${item.type} • ${formatDate(item.date)}
+          </p>
+        </div>
 
-            return `
-              <div
-                class="history-item sale"
-              >
+        <strong class="${
+          item.type === "Sale"
+            ? "stock-good"
+            : "stock-low"
+        }">
+          ${
+            item.type === "Sale"
+              ? "+"
+              : "-"
+          }${money(item.amount)}
+        </strong>
 
-                <div
-                  class="history-icon"
-                >
-                  🛒
-                </div>
+      </div>
+    `).join("");
 
-                <div
-                  class="history-info"
-                >
-
-                  <strong>
-                    Sale
-                  </strong>
-
-                  <h4>
-                    ${escapeHTML(
-                      sale.product
-                    )}
-                  </h4>
-
-                  <p>
-                    Quantity:
-                    ${sale.quantity}
-                  </p>
-
-                  <small>
-                    Receipt:
-                    ${escapeHTML(
-                      sale.receiptNumber ||
-                      ""
-                    )}
-                  </small>
-
-                  <small>
-                    ${formatDate(
-                      sale.date
-                    )}
-                  </small>
-
-                </div>
-
-                <div
-                  class="history-value positive"
-                >
-                  +₦${sale.amount.toLocaleString()}
-                </div>
-
-              </div>
-            `;
-          }
-
-          const expense =
-            transaction.data;
-
-          return `
-            <div
-              class="history-item expense"
-            >
-
-              <div
-                class="history-icon"
-              >
-                💸
-              </div>
-
-              <div
-                class="history-info"
-              >
-
-                <strong>
-                  Expense
-                </strong>
-
-                <h4>
-                  ${escapeHTML(
-                    expense.name
-                  )}
-                </h4>
-
-                <small>
-                  ${formatDate(
-                    expense.date
-                  )}
-                </small>
-
-              </div>
-
-              <div
-                class="history-value negative"
-              >
-                -₦${expense.amount.toLocaleString()}
-              </div>
-
-            </div>
-          `;
-        }
-      )
-      .join("");
+  showReport("today");
 }
 
-// =====================================
-// REPORTS
-// =====================================
 
-function showReport(type) {
+function showReport(period) {
 
-  const report =
-    document.getElementById(
-      "reportResult"
-    );
+  let saleFilter;
+  let expenseFilter;
 
-  if (!report) return;
+  if (period === "week") {
 
-  let selectedSales =
-    [...sales];
+    saleFilter =
+      sale => isThisWeek(sale.date);
 
-  let selectedExpenses =
-    [...expenses];
+    expenseFilter =
+      expense => isThisWeek(expense.date);
 
-  if (
-    type === "today"
-  ) {
+  } else if (period === "month") {
 
-    selectedSales =
-      sales.filter(
-        sale =>
-          isToday(
-            sale.date
-          )
-      );
+    saleFilter =
+      sale => isThisMonth(sale.date);
 
-    selectedExpenses =
-      expenses.filter(
-        expense =>
-          isToday(
-            expense.date
-          )
-      );
+    expenseFilter =
+      expense => isThisMonth(expense.date);
+
+  } else {
+
+    saleFilter =
+      sale => isToday(sale.date);
+
+    expenseFilter =
+      expense => isToday(expense.date);
   }
 
-  if (
-    type === "week"
-  ) {
+  const filteredSales =
+    sales.filter(saleFilter);
 
-    selectedSales =
-      sales.filter(
-        sale =>
-          isThisWeek(
-            sale.date
-          )
-      );
-
-    selectedExpenses =
-      expenses.filter(
-        expense =>
-          isThisWeek(
-            expense.date
-          )
-      );
-  }
-
-  if (
-    type === "month"
-  ) {
-
-    selectedSales =
-      sales.filter(
-        sale =>
-          isThisMonth(
-            sale.date
-          )
-      );
-
-    selectedExpenses =
-      expenses.filter(
-        expense =>
-          isThisMonth(
-            expense.date
-          )
-      );
-  }
+  const filteredExpenses =
+    expenses.filter(expenseFilter);
 
   const totalSales =
-    selectedSales.reduce(
-      (
-        total,
-        sale
-      ) =>
-        total +
-        Number(
-          sale.amount || 0
-        ),
+    filteredSales.reduce(
+      (sum, sale) =>
+        sum + Number(sale.amount || 0),
       0
     );
 
   const totalExpenses =
-    selectedExpenses.reduce(
-      (
-        total,
-        expense
-      ) =>
-        total +
-        Number(
-          expense.amount || 0
-        ),
+    filteredExpenses.reduce(
+      (sum, expense) =>
+        sum + Number(expense.amount || 0),
       0
     );
 
   const profit =
-    totalSales -
-    totalExpenses;
+    totalSales - totalExpenses;
 
-  const itemsSold =
-    selectedSales.reduce(
-      (
-        total,
-        sale
-      ) =>
-        total +
-        Number(
-          sale.quantity || 0
-        ),
-      0
+  const summary =
+    document.getElementById(
+      "reportSummary"
     );
 
-  report.innerHTML = `
-    <div
-      class="report-summary"
-    >
+  if (!summary) return;
 
-      <div
-        class="report-header"
-      >
+  summary.innerHTML = `
 
-        <div>
-
-          <span>
-            Report
-          </span>
-
-          <h2>
-            ${
-              type === "today"
-                ? "Today"
-                : type === "week"
-                  ? "This Week"
-                  : "This Month"
-            }
-          </h2>
-
-        </div>
-
-        <div>
-          📊
-        </div>
-
-      </div>
-
-      <div
-        class="report-grid"
-      >
-
-        <div
-          class="report-box"
-        >
-
-          <span>
-            Total Sales
-          </span>
-
-          <strong>
-            ₦${totalSales.toLocaleString()}
-          </strong>
-
-        </div>
-
-        <div
-          class="report-box"
-        >
-
-          <span>
-            Expenses
-          </span>
-
-          <strong>
-            ₦${totalExpenses.toLocaleString()}
-          </strong>
-
-        </div>
-
-        <div
-          class="report-box"
-        >
-
-          <span>
-            Profit
-          </span>
-
-          <strong>
-            ₦${profit.toLocaleString()}
-          </strong>
-
-        </div>
-
-        <div
-          class="report-box"
-        >
-
-          <span>
-            Items Sold
-          </span>
-
-          <strong>
-            ${itemsSold}
-          </strong>
-
-        </div>
-
-      </div>
-
-      <div
-        class="report-footer"
-      >
-
-        <p>
-          Transactions:
-          ${
-            selectedSales.length +
-            selectedExpenses.length
-          }
-        </p>
-
-      </div>
-
+    <div class="summary-box">
+      <span>Sales</span>
+      <strong>${money(totalSales)}</strong>
     </div>
-  `;
-});
 
-// =====================================
-// RECEIPT
-// =====================================
+    <div class="summary-box">
+      <span>Expenses</span>
+      <strong>${money(totalExpenses)}</strong>
+    </div>
+
+    <div class="summary-box">
+      <span>Profit</span>
+      <strong>${money(profit)}</strong>
+    </div>
+
+  `;
+}
+
+
+/* =====================================================
+   RECEIPT
+===================================================== */
 
 function showReceipt(sale) {
 
-  const modal =
-    document.getElementById(
-      "receiptModal"
-    );
+  if (!sale) return;
 
-  const content =
-    document.getElementById(
-      "receiptContent"
-    );
+  document.getElementById(
+    "receiptBusiness"
+  ).textContent =
+    businessProfile.businessName ||
+    "MarketMate";
 
-  if (
-    !modal ||
-    !content
-  ) {
-    return;
-  }
+  document.getElementById(
+    "receiptAddress"
+  ).textContent =
+    businessProfile.address || "";
 
-  const unitPrice =
-    sale.quantity
-      ? sale.amount /
-        sale.quantity
-      : sale.amount;
+  document.getElementById(
+    "receiptPhone"
+  ).textContent =
+    businessProfile.phone || "";
 
-  content.innerHTML = `
-    <div
-      class="receipt"
-      id="printReceipt"
-    >
+  document.getElementById(
+    "receiptNumber"
+  ).textContent =
+    sale.receiptNumber || "";
 
-      <div
-        class="receipt-header"
-      >
+  document.getElementById(
+    "receiptDate"
+  ).textContent =
+    formatDate(sale.date);
 
-        <h2>
-          ${escapeHTML(
-            businessProfile.businessName ||
-            "MarketMate"
-          )}
-        </h2>
+  document.getElementById(
+    "receiptProduct"
+  ).textContent =
+    sale.product || "";
 
-        ${
-          businessProfile.ownerName
-            ? `
-              <p>
-                ${escapeHTML(
-                  businessProfile.ownerName
-                )}
-              </p>
-            `
-            : ""
-        }
+  document.getElementById(
+    "receiptQuantity"
+  ).textContent =
+    sale.quantity || 0;
 
-        ${
-          businessProfile.phone
-            ? `
-              <p>
-                ${escapeHTML(
-                  businessProfile.phone
-                )}
-              </p>
-            `
-            : ""
-        }
+  document.getElementById(
+    "receiptAmount"
+  ).textContent =
+    Number(sale.amount || 0)
+      .toLocaleString();
 
-        ${
-          businessProfile.address
-            ? `
-              <p>
-                ${escapeHTML(
-                  businessProfile.address
-                )}
-              </p>
-            `
-            : ""
-        }
-
-        <div
-          class="receipt-line"
-        ></div>
-
-        <h3>
-          SALES RECEIPT
-        </h3>
-
-      </div>
-
-      <div
-        class="receipt-meta"
-      >
-
-        <p>
-          <span>
-            Receipt No.
-          </span>
-
-          <strong>
-            ${escapeHTML(
-              sale.receiptNumber ||
-              ""
-            )}
-          </strong>
-        </p>
-
-        <p>
-          <span>
-            Date
-          </span>
-
-          <strong>
-            ${formatDate(
-              sale.date
-            )}
-          </strong>
-        </p>
-
-      </div>
-
-      <div
-        class="receipt-items"
-      >
-
-        <div
-          class="receipt-item"
-        >
-
-          <div>
-
-            <strong>
-              ${escapeHTML(
-                sale.product
-              )}
-            </strong>
-
-            <small>
-              ${sale.quantity}
-              ×
-              ₦${unitPrice.toLocaleString()}
-            </small>
-
-          </div>
-
-          <strong>
-            ₦${sale.amount.toLocaleString()}
-          </strong>
-
-        </div>
-
-      </div>
-
-      <div
-        class="receipt-line"
-      ></div>
-
-      <div
-        class="receipt-total"
-      >
-
-        <span>
-          TOTAL
-        </span>
-
-        <strong>
-          ₦${sale.amount.toLocaleString()}
-        </strong>
-
-      </div>
-
-      <div
-        class="receipt-footer"
-      >
-
-        <p>
-          Thank you for your business!
-        </p>
-
-        <small>
-          Powered by MarketMate
-        </small>
-
-      </div>
-
-    </div>
-  `;
-
-  modal.style.display =
-    "flex";
+  document
+    .getElementById("receiptModal")
+    .classList.remove("hidden");
 }
 
-// =====================================
 
 function closeReceipt() {
 
-  const modal =
-    document.getElementById(
-      "receiptModal"
-    );
-
-  if (modal) {
-
-    modal.style.display =
-      "none";
-  }
+  document
+    .getElementById("receiptModal")
+    .classList.add("hidden");
 }
 
-// =====================================
 
 async function shareReceipt() {
 
-  const content =
-    document.getElementById(
-      "receiptContent"
-    );
+  const receipt =
+    document.getElementById("receipt");
 
-  if (!content) return;
+  if (!receipt) return;
 
   const text =
-    content.innerText;
+    receipt.innerText;
 
   if (
     navigator.share
@@ -4473,147 +1866,83 @@ async function shareReceipt() {
     try {
 
       await navigator.share({
-        title:
-          "MarketMate Receipt",
-
-        text:
-          text
+        title: "MarketMate Receipt",
+        text
       });
 
     } catch (error) {
-
-      console.log(
-        "Sharing cancelled."
-      );
+      console.log("Share cancelled.");
     }
 
     return;
   }
 
-  try {
+  const business =
+    businessProfile.businessName ||
+    "MarketMate";
 
-    await navigator.clipboard
-      .writeText(
-        text
-      );
-
-    alert(
-      "Receipt copied successfully."
+  const message =
+    encodeURIComponent(
+      `Receipt from ${business}\n\n${text}`
     );
 
-  } catch (error) {
-
-    console.error(error);
-
-    alert(
-      "Could not copy receipt."
-    );
-  }
+  window.open(
+    "https://wa.me/?text=" +
+    message,
+    "_blank"
+  );
 }
 
-// =====================================
-// PRINT RECEIPT
-// =====================================
 
 function printReceipt() {
 
   const receipt =
-    document.getElementById(
-      "printReceipt"
-    );
+    document.getElementById("receipt");
 
   if (!receipt) return;
 
   const printWindow =
     window.open(
       "",
-      "_blank"
+      "_blank",
+      "width=500,height=700"
     );
-
-  if (!printWindow) {
-
-    alert(
-      "Please allow pop-ups to print the receipt."
-    );
-
-    return;
-  }
 
   printWindow.document.write(`
     <!DOCTYPE html>
 
     <html>
-
     <head>
 
-      <title>
-        MarketMate Receipt
-      </title>
-
-      <meta
-        name="viewport"
-        content="width=device-width,initial-scale=1"
-      >
+      <title>MarketMate Receipt</title>
 
       <style>
 
-        * {
-          box-sizing: border-box;
-        }
-
         body {
-          font-family:
-            Arial,
-            sans-serif;
-
-          margin: 0;
+          font-family: Arial, sans-serif;
           padding: 20px;
-
-          background: white;
+          color: #111;
         }
 
         .receipt {
-          max-width: 400px;
+          max-width: 380px;
           margin: auto;
-        }
-
-        h2,
-        h3,
-        p {
-          margin-top: 0;
         }
 
         .receipt-header {
           text-align: center;
         }
 
-        .receipt-line {
-          border-top:
-            1px dashed #999;
-
-          margin:
-            15px 0;
-        }
-
-        .receipt-meta p,
-        .receipt-item,
+        .receipt-row,
         .receipt-total {
           display: flex;
-
-          justify-content:
-            space-between;
-
-          gap: 20px;
+          justify-content: space-between;
+          margin: 12px 0;
         }
 
-        .receipt-item {
-          padding:
-            10px 0;
-        }
-
-        .receipt-item small {
-          display: block;
-          margin-top: 5px;
+        .receipt-divider {
+          border-top: 1px dashed #aaa;
+          margin: 15px 0;
         }
 
         .receipt-total {
@@ -4621,17 +1950,20 @@ function printReceipt() {
           font-weight: bold;
         }
 
-        .receipt-footer {
+        .center {
           text-align: center;
-          margin-top: 30px;
         }
 
-        @media print {
-
-          body {
-            padding: 0;
-          }
-
+        .receipt-logo {
+          width: 40px;
+          height: 40px;
+          background: #2563eb;
+          color: white;
+          margin: auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 10px;
         }
 
       </style>
@@ -4644,1190 +1976,28 @@ function printReceipt() {
 
       <script>
 
-        window.onload =
-          function() {
+        window.onload = function() {
+          window.print();
 
-            window.print();
-
-            setTimeout(
-              function() {
-                window.close();
-              },
-              500
-            );
-
-          };
+          setTimeout(
+            () => window.close(),
+            500
+          );
+        };
 
       <\/script>
 
     </body>
-
     </html>
   `);
 
   printWindow.document.close();
 }
 
-// =====================================
-// POS SYSTEM
-// =====================================
 
-let posCart = [];
-
-// =====================================
-
-function displayPOSProducts() {
-
-  const container =
-    document.getElementById(
-      "posProducts"
-    );
-
-  if (!container) return;
-
-  if (
-    products.length === 0
-  ) {
-
-    container.innerHTML = `
-      <div class="empty">
-        <h3>
-          No products available
-        </h3>
-
-        <p>
-          Add products to begin selling.
-        </p>
-      </div>
-    `;
-
-    return;
-  }
-
-  container.innerHTML =
-    products
-      .map(
-        product => {
-
-          const outOfStock =
-            product.stock <= 0;
-
-          return `
-            <button
-              class="pos-product ${
-                outOfStock
-                  ? "disabled"
-                  : ""
-              }"
-
-              ${
-                outOfStock
-                  ? "disabled"
-                  : `onclick="addToPOSCart(${product.id})"`
-              }
-            >
-
-              <span
-                class="pos-product-name"
-              >
-                ${escapeHTML(
-                  product.name
-                )}
-              </span>
-
-              <span
-                class="pos-product-price"
-              >
-                ₦${product.price.toLocaleString()}
-              </span>
-
-              <small>
-                ${
-                  outOfStock
-                    ? "Out of stock"
-                    : `${product.stock} available`
-                }
-              </small>
-
-            </button>
-          `;
-        }
-      )
-      .join("");
-}
-
-// =====================================
-
-function addToPOSCart(id) {
-
-  const product =
-    products.find(
-      p =>
-        Number(p.id) ===
-        Number(id)
-    );
-
-  if (!product) return;
-
-  if (
-    product.stock <= 0
-  ) {
-
-    alert(
-      "This product is out of stock."
-    );
-
-    return;
-  }
-
-  const existing =
-    posCart.find(
-      item =>
-        Number(
-          item.productId
-        ) ===
-        Number(id)
-    );
-
-  if (existing) {
-
-    if (
-      existing.quantity >=
-      product.stock
-    ) {
-
-      alert(
-        "You cannot add more than the available stock."
-      );
-
-      return;
-    }
-
-    existing.quantity += 1;
-
-  } else {
-
-    posCart.push({
-      productId:
-        product.id,
-
-      quantity:
-        1
-    });
-  }
-
-  renderPOSCart();
-}
-
-// =====================================
-
-function renderPOSCart() {
-
-  const cart =
-    document.getElementById(
-      "posCart"
-    );
-
-  const totalElement =
-    document.getElementById(
-      "posTotal"
-    );
-
-  const countElement =
-    document.getElementById(
-      "posCartCount"
-    );
-
-  if (!cart) return;
-
-  let total = 0;
-  let count = 0;
-
-  if (
-    posCart.length === 0
-  ) {
-
-    cart.innerHTML = `
-      <div class="empty">
-        🛒 Your cart is empty.
-      </div>
-    `;
-
-    if (totalElement) {
-      totalElement.textContent =
-        "₦0";
-    }
-
-    if (countElement) {
-      countElement.textContent =
-        "0";
-    }
-
-    return;
-  }
-
-  cart.innerHTML =
-    posCart
-      .map(
-        item => {
-
-          const product =
-            products.find(
-              p =>
-                Number(p.id) ===
-                Number(
-                  item.productId
-                )
-            );
-
-          if (!product) {
-            return "";
-          }
-
-          const subtotal =
-            product.price *
-            item.quantity;
-
-          total += subtotal;
-
-          count +=
-            item.quantity;
-
-          return `
-            <div
-              class="cart-item"
-            >
-
-              <div
-                class="cart-product"
-              >
-
-                <strong>
-                  ${escapeHTML(
-                    product.name
-                  )}
-                </strong>
-
-                <small>
-                  ₦${product.price.toLocaleString()}
-                  each
-                </small>
-
-              </div>
-
-              <div
-                class="cart-controls"
-              >
-
-                <button
-                  type="button"
-                  onclick="changePOSQuantity(
-                    ${product.id},
-                    -1
-                  )"
-                >
-                  −
-                </button>
-
-                <span>
-                  ${item.quantity}
-                  // =====================================
-// POS QUANTITY CONTROL
-// =====================================
-
-function changePOSQuantity(
-  id,
-  change
-) {
-
-  const item =
-    posCart.find(
-      cartItem =>
-        Number(
-          cartItem.productId
-        ) === Number(id)
-    );
-
-  const product =
-    products.find(
-      p =>
-        Number(p.id) ===
-        Number(id)
-    );
-
-  if (
-    !item ||
-    !product
-  ) {
-    return;
-  }
-
-  item.quantity += change;
-
-  // Remove item when quantity reaches zero
-  if (
-    item.quantity <= 0
-  ) {
-
-    posCart =
-      posCart.filter(
-        cartItem =>
-          Number(
-            cartItem.productId
-          ) !== Number(id)
-      );
-
-  }
-
-  // Don't allow quantity above stock
-  if (
-    item.quantity >
-    product.stock
-  ) {
-
-    item.quantity =
-      product.stock;
-
-    alert(
-      "You cannot sell more than the available stock."
-    );
-  }
-
-  renderPOSCart();
-}
-
-// =====================================
-// CLEAR POS CART
-// =====================================
-
-function clearPOSCart() {
-
-  if (
-    posCart.length === 0
-  ) {
-    return;
-  }
-
-  if (
-    !confirm(
-      "Clear all items from the cart?"
-    )
-  ) {
-    return;
-  }
-
-  posCart = [];
-
-  renderPOSCart();
-}
-
-// =====================================
-// POS CHECKOUT
-// =====================================
-
-async function checkoutPOS() {
-
-  if (!requireUser()) {
-    return;
-  }
-
-  if (
-    posCart.length === 0
-  ) {
-
-    alert(
-      "Your cart is empty."
-    );
-
-    return;
-  }
-
-  // Verify stock before checkout
-  for (
-    const item of posCart
-  ) {
-
-    const product =
-      products.find(
-        p =>
-          Number(p.id) ===
-          Number(
-            item.productId
-          )
-      );
-
-    if (!product) {
-      alert(
-        "One of the products in your cart no longer exists."
-      );
-
-      return;
-    }
-
-    if (
-      item.quantity <= 0
-    ) {
-
-      alert(
-        "Invalid product quantity."
-      );
-
-      return;
-    }
-
-    if (
-      item.quantity >
-      product.stock
-    ) {
-
-      alert(
-        `${product.name} only has ${product.stock} available.`
-      );
-
-      return;
-    }
-  }
-
-  // Calculate total
-  let total = 0;
-
-  posCart.forEach(
-    item => {
-
-      const product =
-        products.find(
-          p =>
-            Number(p.id) ===
-            Number(
-              item.productId
-            )
-        );
-
-      if (product) {
-
-        total +=
-          product.price *
-          item.quantity;
-      }
-    }
-  );
-
-  const confirmed =
-    confirm(
-      `Complete sale for ₦${total.toLocaleString()}?`
-    );
-
-  if (!confirmed) {
-    return;
-  }
-
-  const receiptNumber =
-    "MM-" +
-    Date.now();
-
-  const createdSales = [];
-
-  // ===================================
-  // PROCESS EACH CART ITEM
-  // ===================================
-
-  for (
-    const item of posCart
-  ) {
-
-    const product =
-      products.find(
-        p =>
-          Number(p.id) ===
-          Number(
-            item.productId
-          )
-      );
-
-    if (!product) {
-      continue;
-    }
-
-    const amount =
-      product.price *
-      item.quantity;
-
-    // Save sale
-    const {
-      data,
-      error
-    } =
-      await supabaseClient
-        .from("sales")
-        .insert({
-          user_id:
-            currentUser.id,
-
-          product:
-            product.name,
-
-          quantity:
-            item.quantity,
-
-          amount:
-            amount,
-
-          receipt_number:
-            receiptNumber
-        })
-        .select()
-        .single();
-
-    if (error) {
-
-      console.error(error);
-
-      alert(
-        "Could not complete the sale: " +
-        error.message
-      );
-
-      return;
-    }
-
-    createdSales.push(
-      mapSale(data)
-    );
-
-    // Update stock
-    const newStock =
-      product.stock -
-      item.quantity;
-
-    const {
-      data:
-        updatedProduct,
-      error:
-        stockError
-    } =
-      await supabaseClient
-        .from("products")
-        .update({
-          stock:
-            newStock
-        })
-        .eq(
-          "id",
-          product.id
-        )
-        .eq(
-          "user_id",
-          currentUser.id
-        )
-        .select()
-        .single();
-
-    if (stockError) {
-
-      console.error(
-        stockError
-      );
-
-      alert(
-        "The sale was recorded, but stock could not be updated."
-      );
-
-      return;
-    }
-
-    // Update local product
-    Object.assign(
-      product,
-      mapProduct(
-        updatedProduct
-      )
-    );
-  }
-
-  // Add sales to local history
-  sales.unshift(
-    ...createdSales
-  );
-
-  // Clear cart
-  posCart = [];
-
-  renderPOSCart();
-
-  // Refresh application
-  displayProducts();
-  displayPOSProducts();
-  updateSaleProducts();
-  displayHistory();
-  updateDashboard();
-
-  alert(
-    `Sale completed successfully!\nReceipt: ${receiptNumber}`
-  );
-
-  // Show receipt for single-item sale
-  if (
-    createdSales.length ===
-    1
-  ) {
-
-    showReceipt(
-      createdSales[0]
-    );
-
-  } else {
-
-    // For multiple products,
-    // create a combined receipt object
-    const combinedSale = {
-
-      receiptNumber:
-        receiptNumber,
-
-      product:
-        `${createdSales.length} products`,
-
-      quantity:
-        createdSales.reduce(
-          (
-            sum,
-            sale
-          ) =>
-            sum +
-            sale.quantity,
-          0
-        ),
-
-      amount:
-        createdSales.reduce(
-          (
-            sum,
-            sale
-          ) =>
-            sum +
-            sale.amount,
-          0
-        ),
-
-      date:
-        new Date().toISOString()
-    };
-
-    showReceipt(
-      combinedSale
-    );
-  }
-}
-
-// =====================================
-// REFRESH POS
-// =====================================
-
-function refreshPOS() {
-
-  displayPOSProducts();
-
-  renderPOSCart();
-
-  updateSaleProducts();
-
-  updateDashboard();
-}
-
-// =====================================
-// SEARCH PRODUCTS
-// =====================================
-
-function searchProducts() {
-
-  displayProducts();
-}
-
-// =====================================
-// SEARCH CUSTOMERS
-// =====================================
-
-function searchCustomers() {
-
-  displayCustomers();
-}
-
-// =====================================
-// SEARCH POS PRODUCTS
-// =====================================
-
-function searchPOSProducts() {
-
-  const input =
-    document.getElementById(
-      "posProductSearch"
-    );
-
-  const container =
-    document.getElementById(
-      "posProducts"
-    );
-
-  if (
-    !container
-  ) {
-    return;
-  }
-
-  const search =
-    input
-      ?.value
-      .toLowerCase()
-      .trim() || "";
-
-  const filtered =
-    products.filter(
-      product =>
-        product.name
-          .toLowerCase()
-          .includes(search)
-    );
-
-  if (
-    filtered.length ===
-    0
-  ) {
-
-    container.innerHTML = `
-      <div class="empty">
-        No products found.
-      </div>
-    `;
-
-    return;
-  }
-
-  container.innerHTML =
-    filtered
-      .map(
-        product => {
-
-          const outOfStock =
-            product.stock <=
-            0;
-
-          return `
-            <button
-              type="button"
-              class="pos-product ${
-                outOfStock
-                  ? "disabled"
-                  : ""
-              }"
-
-              ${
-                outOfStock
-                  ? "disabled"
-                  : `onclick="addToPOSCart(${product.id})"`
-              }
-            >
-
-              <span>
-                ${escapeHTML(
-                  product.name
-                )}
-              </span>
-
-              <strong>
-                ₦${product.price.toLocaleString()}
-              </strong>
-
-              <small>
-                ${
-                  outOfStock
-                    ? "Out of stock"
-                    : `${product.stock} available`
-                }
-              </small>
-
-            </button>
-          `;
-        }
-      )
-      .join("");
-}
-
-// =====================================
-// ESCAPE HTML
-// =====================================
-
-function escapeHTML(value) {
-
-  return String(
-    value ?? ""
-  )
-
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-
-    .replace(
-      /</g,
-      "&lt;"
-    )
-
-    .replace(
-      />/g,
-      "&gt;"
-    )
-
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-
-    .replace(
-      /'/g,
-      "&#039;"
-    );
-}
-
-// =====================================
-// ESCAPE ATTRIBUTE
-// =====================================
-
-function escapeAttribute(
-  value
-) {
-
-  return String(
-    value ?? ""
-  )
-
-    .replace(
-      /\\/g,
-      "\\\\"
-    )
-
-    .replace(
-      /'/g,
-      "\\'"
-    )
-
-    .replace(
-      /"/g,
-      "&quot;"
-    );
-}
-
-// =====================================
-// FORMAT DATE
-// =====================================
-
-function formatDate(
-  dateString
-) {
-
-  if (!dateString) {
-    return "";
-  }
-
-  const date =
-    new Date(
-      dateString
-    );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-
-    return "";
-  }
-
-  return date.toLocaleString(
-    "en-NG",
-    {
-      dateStyle:
-        "medium",
-
-      timeStyle:
-        "short"
-    }
-  );
-}
-
-// =====================================
-// TODAY
-// =====================================
-
-function isToday(
-  dateString
-) {
-
-  const date =
-    new Date(
-      dateString
-    );
-
-  const today =
-    new Date();
-
-  return (
-    date.toDateString() ===
-    today.toDateString()
-  );
-}
-
-// =====================================
-// THIS WEEK
-// =====================================
-
-function isThisWeek(
-  dateString
-) {
-
-  const date =
-    new Date(
-      dateString
-    );
-
-  const today =
-    new Date();
-
-  const firstDay =
-    new Date(
-      today
-    );
-
-  firstDay.setDate(
-    today.getDate() -
-    today.getDay()
-  );
-
-  firstDay.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  return date >=
-    firstDay;
-}
-
-// =====================================
-// THIS MONTH
-// =====================================
-
-function isThisMonth(
-  dateString
-) {
-
-  const date =
-    new Date(
-      dateString
-    );
-
-  const today =
-    new Date();
-
-  return (
-    date.getMonth() ===
-      today.getMonth() &&
-
-    date.getFullYear() ===
-      today.getFullYear()
-  );
-}
-
-// =====================================
-// DASHBOARD
-// =====================================
-
-function updateDashboard() {
-
-  const todaySales =
-    sales
-      .filter(
-        sale =>
-          isToday(
-            sale.date
-          )
-      )
-      .reduce(
-        (
-          total,
-          sale
-        ) =>
-          total +
-          Number(
-            sale.amount || 0
-          ),
-        0
-      );
-
-  const todayExpenses =
-    expenses
-      .filter(
-        expense =>
-          isToday(
-            expense.date
-          )
-      )
-      .reduce(
-        (
-          total,
-          expense
-        ) =>
-          total +
-          Number(
-            expense.amount || 0
-          ),
-        0
-      );
-
-  const profit =
-    todaySales -
-    todayExpenses;
-
-  const salesElement =
-    document.getElementById(
-      "todaySales"
-    );
-
-  const expensesElement =
-    document.getElementById(
-      "todayExpenses"
-    );
-
-  const profitElement =
-    document.getElementById(
-      "todayProfit"
-    );
-
-  const productElement =
-    document.getElementById(
-      "productTotal"
-    );
-
-  if (
-    salesElement
-  ) {
-
-    salesElement.textContent =
-      "₦" +
-      todaySales.toLocaleString();
-  }
-
-  if (
-    expensesElement
-  ) {
-
-    expensesElement.textContent =
-      "₦" +
-      todayExpenses.toLocaleString();
-  }
-
-  if (
-    profitElement
-  ) {
-
-    profitElement.textContent =
-      "₦" +
-      profit.toLocaleString();
-  }
-
-  if (
-    productElement
-  ) {
-
-    productElement.textContent =
-      products.length;
-  }
-
-  displayLowStock();
-}
-
-// =====================================
-// LOW STOCK
-// =====================================
-
-function displayLowStock() {
-
-  const list =
-    document.getElementById(
-      "lowStockList"
-    );
-
-  if (!list) return;
-
-  const lowStock =
-    products.filter(
-      product =>
-        Number(
-          product.stock
-        ) <=
-        Number(
-          product.lowStock
-        )
-    );
-
-  if (
-    lowStock.length ===
-    0
-  ) {
-
-    list.innerHTML = `
-      <div class="empty">
-        <strong>
-          ✅ Inventory looks good
-        </strong>
-
-        <p>
-          No products are currently low in stock.
-        </p>
-      </div>
-    `;
-
-    return;
-  }
-
-  list.innerHTML =
-    lowStock
-      .map(
-        product => `
-          <div
-            class="low-stock-item"
-          >
-
-            <div>
-
-              <strong>
-                ⚠️ ${escapeHTML(
-                  product.name
-                )}
-              </strong>
-
-              <p>
-                Only
-                <strong>
-                  ${product.stock}
-                </strong>
-                left.
-              </p>
-
-            </div>
-
-            <span>
-              Low stock
-            </span>
-
-          </div>
-        `
-      )
-      .join("");}
-
-// =====================================
-// CLOSE MODALS WHEN CLICKING OUTSIDE
-// =====================================
+/* =====================================================
+   CLOSE MODALS
+===================================================== */
 
 document.addEventListener(
   "click",
@@ -5848,35 +2018,25 @@ document.addEventListener(
         "receiptModal"
       );
 
-    if (
-      event.target ===
-      productModal
-    ) {
-
+    if (event.target === productModal) {
       closeProductForm();
     }
 
-    if (
-      event.target ===
-      customerModal
-    ) {
-
+    if (event.target === customerModal) {
       closeCustomerForm();
     }
 
-    if (
-      event.target ===
-      receiptModal
-    ) {
-
+    if (event.target === receiptModal) {
       closeReceipt();
     }
+
   }
 );
 
-// =====================================
-// INITIALIZE MARKETMATE
-// =====================================
+
+/* =====================================================
+   INITIALIZE
+===================================================== */
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -5886,145 +2046,66 @@ document.addEventListener(
       "🚀 MarketMate starting..."
     );
 
-    // Prepare POS
-    displayPOSProducts();
-
-    renderPOSCart();
-
-    // Check authentication
     await checkUser();
 
     console.log(
-      "✅ MarketMate initialized."
+      "✅ MarketMate ready."
     );
+
   }
 );
 
-// =====================================
-// GLOBAL FUNCTIONS
-// =====================================
 
-window.signupUser =
-  signupUser;
+/* =====================================================
+   GLOBAL FUNCTIONS
+===================================================== */
 
-window.loginUser =
-  loginUser;
+window.signupUser = signupUser;
+window.loginUser = loginUser;
+window.logoutUser = logoutUser;
+window.logout = logout;
 
-window.logoutUser =
-  logoutUser;
+window.showSignup = showSignup;
+window.showLogin = showLogin;
+window.showApp = showApp;
 
-window.logout =
-  logout;
+window.showPage = showPage;
 
-window.showSignup =
-  showSignup;
+window.openProductForm = openProductForm;
+window.closeProductForm = closeProductForm;
+window.addProduct = addProduct;
+window.displayProducts = displayProducts;
+window.deleteProduct = deleteProduct;
 
-window.showLogin =
-  showLogin;
+window.updateSaleProducts = updateSaleProducts;
+window.recordSale = recordSale;
 
-window.showApp =
-  showApp;
+window.displayPOSProducts = displayPOSProducts;
+window.addToPOSCart = addToPOSCart;
+window.renderPOSCart = renderPOSCart;
+window.changePOSQuantity = changePOSQuantity;
+window.clearPOSCart = clearPOSCart;
+window.checkoutPOS = checkoutPOS;
 
-window.showPage =
-  showPage;
+window.recordExpense = recordExpense;
 
-window.openProductForm =
-  openProductForm;
+window.openCustomerForm = openCustomerForm;
+window.closeCustomerForm = closeCustomerForm;
+window.addCustomer = addCustomer;
+window.displayCustomers = displayCustomers;
+window.messageCustomer = messageCustomer;
 
-window.closeProductForm =
-  closeProductForm;
+window.saveBusinessProfile = saveBusinessProfile;
+window.loadBusinessProfile = loadBusinessProfile;
 
-window.addProduct =
-  addProduct;
+window.displayHistory = displayHistory;
+window.showReport = showReport;
 
-window.displayProducts =
-  displayProducts;
-
-window.deleteProduct =
-  deleteProduct;
-
-window.updateSaleProducts =
-  updateSaleProducts;
-
-window.recordSale =
-  recordSale;
-
-window.recordExpense =
-  recordExpense;
-
-window.openCustomerForm =
-  openCustomerForm;
-
-window.closeCustomerForm =
-  closeCustomerForm;
-
-window.addCustomer =
-  addCustomer;
-
-window.displayCustomers =
-  displayCustomers;
-
-window.messageCustomer =
-  messageCustomer;
-
-window.saveBusinessProfile =
-  saveBusinessProfile;
-
-window.loadBusinessProfile =
-  loadBusinessProfile;
-
-window.displayHistory =
-  displayHistory;
-
-window.showReport =
-  showReport;
-
-window.showReceipt =
-  showReceipt;
-
-window.closeReceipt =
-  closeReceipt;
-
-window.shareReceipt =
-  shareReceipt;
-
-window.printReceipt =
-  printReceipt;
-
-window.displayPOSProducts =
-  displayPOSProducts;
-
-window.addToPOSCart =
-  addToPOSCart;
-
-window.renderPOSCart =
-  renderPOSCart;
-
-window.changePOSQuantity =
-  changePOSQuantity;
-
-window.clearPOSCart =
-  clearPOSCart;
-
-window.checkoutPOS =
-  checkoutPOS;
-
-window.refreshPOS =
-  refreshPOS;
-
-window.searchProducts =
-  searchProducts;
-
-window.searchCustomers =
-  searchCustomers;
-
-window.searchPOSProducts =
-  searchPOSProducts;
-
-// =====================================
-// READY
-// =====================================
+window.showReceipt = showReceipt;
+window.closeReceipt = closeReceipt;
+window.shareReceipt = shareReceipt;
+window.printReceipt = printReceipt;
 
 console.log(
   "MarketMate app.js loaded successfully."
-);             
+);
